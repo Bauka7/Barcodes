@@ -1,0 +1,94 @@
+import asyncio
+
+from sqlalchemy import select
+
+from app.db.database import AsyncSessionLocal
+from app.models import AppSetting, BarcodeCounter
+
+DEFAULT_PACKAGE_TYPES = [
+    "GP",
+    "CE",
+    "AV",
+    "UP",
+    "CO",
+    "GB",
+    "CZ",
+    "GF",
+    "RR",
+    "RZ",
+]
+
+DEFAULT_SETTINGS = {
+    "label_width": "126",
+    "label_height": "71",
+    "default_rows": "5",
+    "default_columns": "2",
+    "default_left_margin": "10",
+    "default_top_margin": "10",
+    "barcode_scale": "1.0",
+    "country_suffix": "KZ",
+}
+
+
+async def seed_barcode_counters() -> tuple[int, int]:
+    created_count = 0
+    skipped_count = 0
+
+    async with AsyncSessionLocal() as session:
+        for package_type in DEFAULT_PACKAGE_TYPES:
+            result = await session.execute(
+                select(BarcodeCounter).where(BarcodeCounter.package_type == package_type)
+            )
+            existing_counter = result.scalar_one_or_none()
+
+            if existing_counter is not None:
+                skipped_count += 1
+                continue
+
+            session.add(BarcodeCounter(package_type=package_type, current_value=0))
+            created_count += 1
+
+        await session.commit()
+
+    return created_count, skipped_count
+
+
+async def seed_app_settings() -> tuple[int, int]:
+    created_count = 0
+    skipped_count = 0
+
+    async with AsyncSessionLocal() as session:
+        for key, value in DEFAULT_SETTINGS.items():
+            result = await session.execute(
+                select(AppSetting).where(AppSetting.key == key)
+            )
+            existing_setting = result.scalar_one_or_none()
+
+            if existing_setting is not None:
+                skipped_count += 1
+                continue
+
+            session.add(AppSetting(key=key, value=value))
+            created_count += 1
+
+        await session.commit()
+
+    return created_count, skipped_count
+
+
+async def seed_database() -> None:
+    created_counters, skipped_counters = await seed_barcode_counters()
+    created_settings, skipped_settings = await seed_app_settings()
+
+    print(f"Created counters: {created_counters}")
+    print(f"Skipped counters: {skipped_counters}")
+    print(f"Created settings: {created_settings}")
+    print(f"Skipped settings: {skipped_settings}")
+
+
+def main() -> None:
+    asyncio.run(seed_database())
+
+
+if __name__ == "__main__":
+    main()
