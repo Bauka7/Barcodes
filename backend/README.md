@@ -61,7 +61,7 @@ Expected response:
 
 ## Migrations
 
-Create a new migration:
+Create a new migration after model changes:
 
 ```powershell
 alembic revision --autogenerate -m "describe_changes"
@@ -90,21 +90,52 @@ Use Swagger at `http://127.0.0.1:8000/docs` or send a request directly:
 ```powershell
 curl -X POST "http://127.0.0.1:8000/api/barcodes/numbers" `
   -H "Content-Type: application/json" `
-  -d "{\"package_type\":\"KG\",\"quantity\":4}"
+  -d "{\"package_type\":\"KG\",\"quantity\":4,\"department_id\":50,\"generated_by\":\"test_user\",\"notes\":\"manual test\"}"
 ```
 
 Example response:
 
 ```json
 {
+  "batch_id": 1,
   "items": [
     "KG010000019KZ",
     "KG010000022KZ",
     "KG010000036KZ",
     "KG010000040KZ"
   ],
-  "count": 4
+  "count": 4,
+  "first_barcode": "KG010000019KZ",
+  "last_barcode": "KG010000040KZ"
 }
+```
+
+The request creates one generation batch and stores every generated SHPI in the database.
+
+## Barcode History
+
+List generation batches, newest first:
+
+```powershell
+curl "http://127.0.0.1:8000/api/barcodes/history/batches?limit=20&offset=0"
+```
+
+Filter by package type or department:
+
+```powershell
+curl "http://127.0.0.1:8000/api/barcodes/history/batches?package_type=KG&department_id=50"
+```
+
+Get a batch with all generated SHPI:
+
+```powershell
+curl "http://127.0.0.1:8000/api/barcodes/history/batches/1"
+```
+
+Search one generated SHPI:
+
+```powershell
+curl "http://127.0.0.1:8000/api/barcodes/history/search?barcode=KG010000019KZ"
 ```
 
 ## Import Departments

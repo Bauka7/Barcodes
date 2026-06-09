@@ -1,9 +1,11 @@
+from dataclasses import dataclass
 import re
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AppSetting, BarcodeCounter
+from app.services.barcode_history_service import create_generation_history
 
 CHECK_DIGIT_WEIGHTS = (8, 6, 4, 2, 3, 5, 9, 7)
 PACKAGE_TYPE_PATTERN = re.compile(r"^[A-Z]{2}$")
@@ -14,6 +16,14 @@ MAX_COUNTER_VALUE = 999_999
 
 class CounterNotFoundError(LookupError):
     pass
+
+
+@dataclass(slots=True)
+class GeneratedBarcodeNumbersResult:
+    batch_id: int
+    items: list[str]
+    first_barcode: str
+    last_barcode: str
 
 
 def validate_package_type(package_type: str) -> str:
@@ -133,3 +143,68 @@ async def generate_barcode_numbers(
         )
         for counter_value in range(start_value, end_value + 1)
     ]
+
+
+async def generate_barcode_numbers_with_history(
+    session: AsyncSession,
+    package_type: str,
+    quantity: int,
+    department_id: int | None = None,
+    generated_by: str | None = None,
+    notes: str | None = None,
+    source: str = "api",
+) -> GeneratedBarcodeNumbersResult:
+    normalized_package_type = validate_package_type(package_type)
+    validated_quantity = validate_quantity(quantity)
+
+    async with session.begin():
+        obl_code = await get_setting_value(session, "obl_code", DEFAULT_OBL_CODE)
+        suffix = (await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)).upper()
+
+        result = await session.execute(
+            select(BarcodeCounter)
+            .where(BarcodeCounter.package_type == normalized_package_type)
+            .with_for_update()
+        )
+        counter = result.scalar_one_or_none()
+
+        if counter is None:
+            raise CounterNotFoundError(
+                f"Counter row for package_type '{normalized_package_type}' was not found."
+            )
+
+        start_value = counter.current_value + 1
+        end_value = counter.current_value + validated_quantity
+
+        if end_value > MAX_COUNTER_VALUE:
+            raise ValueError("Counter exceeded the maximum 6-digit serial value.")
+
+        sequence_numbers = list(range(start_value, end_value + 1))
+        items = [
+            build_barcode_number(
+                package_type=normalized_package_type,
+                obl_code=obl_code,
+                counter_value=counter_value,
+                suffix=suffix,
+            )
+            for counter_value in sequence_numbers
+        ]
+
+        counter.current_value = end_value
+        batch = await create_generation_history(
+            session=session,
+            package_type=normalized_package_type,
+            barcodes=items,
+            sequence_numbers=sequence_numbers,
+            department_id=department_id,
+            generated_by=generated_by,
+            source=source,
+            notes=notes,
+        )
+
+    return GeneratedBarcodeNumbersResult(
+        batch_id=batch.id,
+        items=items,
+        first_barcode=items[0],
+        last_barcode=items[-1],
+    )
