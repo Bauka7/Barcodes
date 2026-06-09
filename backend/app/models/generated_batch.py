@@ -19,6 +19,11 @@ class GeneratedBatch(Base):
         index=True,
         nullable=True,
     )
+    range_id: Mapped[int | None] = mapped_column(
+        ForeignKey("barcode_ranges.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
     generated_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source: Mapped[str | None] = mapped_column(
         String(50),

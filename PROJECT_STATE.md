@@ -19,6 +19,8 @@ The backend currently supports:
 - Roles: `admin`, `operator`, `client`.
 - Audit logging for important user actions.
 - Clients, range requests, and barcode range allocation foundation.
+- SHPI generation from allocated barcode ranges.
+- Individual barcode lifecycle tracking.
 
 The backend intentionally does not include:
 
@@ -26,7 +28,6 @@ The backend intentionally does not include:
 - Docker.
 - Direct printer control.
 - PDF/image generation beyond the current downloadable PDF labels.
-- Generation from allocated ranges.
 
 ## Tech Stack
 
@@ -149,6 +150,7 @@ Fields:
 - `last_barcode`
 - `department_id`
 - `generated_by`
+- `range_id`
 - `source`
 - `status`
 - `generated_at`
@@ -167,12 +169,27 @@ Fields:
 - `barcode`
 - `package_type`
 - `department_id`
+- `range_id`
 - `sequence_number`
 - `printed`
 - `printed_at`
+- `status`
+- `cancelled_at`
+- `cancelled_by`
+- `cancellation_reason`
+- `used_at`
+- `used_by`
+- `usage_notes`
 - `generated_at`
 
 `barcode` is unique to prevent duplicate SHPI records.
+
+Lifecycle statuses:
+
+- `generated`
+- `printed`
+- `used`
+- `cancelled`
 
 ### PrintedBatch
 
@@ -393,6 +410,9 @@ Admin/operator only.
 ```http
 GET /api/ranges
 GET /api/ranges/{range_id}
+POST /api/ranges/{range_id}/generate
+GET /api/ranges/{range_id}/remaining
+GET /api/ranges/{range_id}/batches
 ```
 
 ### Barcode Generation
@@ -453,6 +473,31 @@ GET /api/barcodes/history/search?barcode=KG015778998KZ
 ```
 
 Returns the generated barcode record plus batch info.
+
+### Barcode Lifecycle
+
+```http
+GET /api/barcodes/{barcode}/detail
+POST /api/barcodes/{barcode}/cancel
+POST /api/barcodes/{barcode}/mark-used
+GET /api/barcodes/lifecycle
+```
+
+Permissions:
+
+- detail: any authenticated active user;
+- lifecycle list: `admin`, `operator`;
+- cancel: `admin`, `operator`;
+- mark used: `admin`, `operator`.
+
+Lifecycle query params:
+
+- `status`, optional;
+- `package_type`, optional;
+- `department_id`, optional;
+- `printed`, optional;
+- `limit`, default `20`, max `100`;
+- `offset`, default `0`.
 
 ### PDF Labels and Print Tracking
 
@@ -559,7 +604,9 @@ Rules:
 - Counter update, generated batch insert, and generated barcode inserts happen in one transaction.
 - Duplicate SHPI are prevented by counter locking and the unique `generated_barcodes.barcode` constraint.
 - Range approval also locks the package counter with `SELECT FOR UPDATE`.
-- Range approval increments `BarcodeCounter.current_value` and creates `BarcodeRange`, but does not create `GeneratedBarcode` rows yet.
+- Range approval increments `BarcodeCounter.current_value` and creates `BarcodeRange`.
+- Range generation locks the `BarcodeRange` row with `SELECT FOR UPDATE`.
+- Range generation creates `GeneratedBatch` and `GeneratedBarcode` rows linked by `range_id`.
 
 Check digit algorithm:
 
@@ -652,6 +699,8 @@ Print tracking behavior:
 - If PDF generation fails, no DB updates are made.
 - If DB update fails, the request fails instead of returning success.
 - A batch can currently be printed more than once; each print action creates another `PrintedBatch`.
+- Printed barcodes get `printed = true`, `printed_at`, and `status = printed`.
+- Print tracking does not overwrite lifecycle status for `used` or `cancelled` barcodes.
 
 ## Authentication and Audit
 
@@ -692,6 +741,35 @@ Audit actions currently logged:
 - `range_request_rejected`
 - `range_request_cancelled`
 - `range_created`
+- `range_generation_started`
+- `range_generation_completed`
+- `range_exhausted`
+- `barcode_cancelled`
+- `barcode_marked_used`
+- `barcode_detail_viewed`
+
+## Barcode Lifecycle
+
+Each `GeneratedBarcode` is now an individual lifecycle entity.
+
+Lifecycle rules:
+
+- new barcodes are created with status `generated`;
+- printing moves `generated` barcodes to `printed`;
+- printing does not overwrite `used` or `cancelled`;
+- only `generated` or `printed` barcodes can be cancelled;
+- used barcodes cannot be cancelled;
+- only `generated` or `printed` barcodes can be marked used;
+- cancelled barcodes cannot be marked used.
+
+Detailed lookup returns:
+
+- barcode fields;
+- batch info;
+- range info when `range_id` exists;
+- department info when `department_id` exists;
+- print status;
+- lifecycle status and timestamps/users/reasons.
 
 ## Range Allocation Foundation
 
@@ -707,7 +785,38 @@ Approval behavior:
 - `BarcodeRange.current_number` starts at `start_number`;
 - request is marked `approved`;
 - `handled_by` and `handled_at` are set;
-- individual `GeneratedBarcode` rows are not created during approval yet.
+- individual `GeneratedBarcode` rows are not created during approval.
+
+Range generation behavior:
+
+- request body is `{"quantity": 10, "notes": "optional"}`;
+- allowed roles are `admin` and `operator`;
+- range must be `active`;
+- range row is locked with `SELECT FOR UPDATE`;
+- serial numbers are consumed sequentially from `BarcodeRange.current_number`;
+- generated SHPI uses the same legacy format and check digit algorithm as direct generation;
+- `GeneratedBatch.source` is `range`;
+- `GeneratedBatch.range_id` and `GeneratedBarcode.range_id` point to the source range;
+- if any barcode insert fails, `current_number` and status changes roll back;
+- when the final serial is consumed, range status becomes `exhausted`.
+
+Remaining endpoint:
+
+```http
+GET /api/ranges/{range_id}/remaining
+```
+
+Response shape:
+
+```json
+{
+  "range_id": 1,
+  "remaining": 250,
+  "current_number": 1501,
+  "end_number": 1750,
+  "status": "active"
+}
+```
 
 Range permissions:
 
@@ -727,6 +836,8 @@ Migration files:
 - `0004_add_printed_batches.py`
 - `0005_add_auth_and_audit.py`
 - `0006_add_clients_and_ranges.py`
+- `0007_add_range_links_to_generated_history.py`
+- `0008_add_barcode_lifecycle_fields.py`
 
 Common commands from `backend/`:
 
@@ -763,7 +874,6 @@ Likely future work:
 - Add barcode image generation if required by frontend.
 - Add print reprint rules and print status workflow.
 - Add filtering/report endpoints for generated SHPI accounting.
-- Integrate SHPI generation from allocated ranges.
 - Add range exhaustion and expiration handling.
 - Add CSV/Excel export for reports.
 - Add CRUD/admin endpoints for settings and counters.

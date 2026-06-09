@@ -4,7 +4,7 @@ FastAPI backend for a KazPost-style barcode generation system.
 
 The project currently includes the application scaffold, async database setup, migrations, seed data, and barcode number generation endpoints.
 
-It also includes authentication, roles, audit logging, clients, range requests, and the first barcode range allocation foundation.
+It also includes authentication, roles, audit logging, clients, range requests, barcode range allocation, SHPI generation from allocated ranges, and individual SHPI lifecycle tracking.
 
 ## Requirements
 
@@ -203,6 +203,59 @@ curl "http://127.0.0.1:8000/api/barcodes/history/search?barcode=KG010000019KZ" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
+## Barcode Lifecycle
+
+Detailed lookup for one SHPI:
+
+```powershell
+curl "http://127.0.0.1:8000/api/barcodes/KG010000019KZ/detail" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+List generated barcodes by lifecycle:
+
+```powershell
+curl "http://127.0.0.1:8000/api/barcodes/lifecycle?status=printed&limit=20&offset=0" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+Filters:
+
+- `status`: `generated`, `printed`, `used`, `cancelled`
+- `package_type`
+- `department_id`
+- `printed`
+- `limit`
+- `offset`
+
+Cancel a barcode, admin/operator only:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/barcodes/KG010000019KZ/cancel" `
+  -H "Content-Type: application/json" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -d "{\"reason\":\"wrong print\"}"
+```
+
+Mark a barcode as used, admin/operator only:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/barcodes/KG010000019KZ/mark-used" `
+  -H "Content-Type: application/json" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -d "{\"notes\":\"accepted in PUS\"}"
+```
+
+Lifecycle rules:
+
+- new barcodes start as `generated`;
+- printing changes `generated` barcodes to `printed`;
+- printing does not overwrite `used` or `cancelled`;
+- `generated` and `printed` barcodes can be cancelled;
+- `generated` and `printed` barcodes can be marked as used;
+- `used` barcodes cannot be cancelled;
+- `cancelled` barcodes cannot be marked used.
+
 ## PDF Labels
 
 Before generating PDF labels, make sure `DejaVuSans.ttf` exists at `backend/assets/fonts/DejaVuSans.ttf` or configure `DEJAVU_SANS_FONT_PATH`.
@@ -329,6 +382,39 @@ Approval behavior:
 - creates one `BarcodeRange`;
 - marks the request as `approved`;
 - does not create individual `GeneratedBarcode` rows yet.
+
+Range generation behavior:
+
+- locks `BarcodeRange` with `SELECT FOR UPDATE`;
+- generates legacy-compatible SHPI from `BarcodeRange.current_number`;
+- creates one `GeneratedBatch` with `source = "range"`;
+- creates one `GeneratedBarcode` row for every generated SHPI;
+- links generated batch and barcode rows to `range_id`;
+- increments `BarcodeRange.current_number`;
+- sets range status to `exhausted` when all numbers are consumed.
+
+Check remaining numbers:
+
+```powershell
+curl "http://127.0.0.1:8000/api/ranges/1/remaining" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+Generate SHPI from a range, admin/operator only:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/ranges/1/generate" `
+  -H "Content-Type: application/json" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -d "{\"quantity\":10,\"notes\":\"range test\"}"
+```
+
+List batches generated from a range:
+
+```powershell
+curl "http://127.0.0.1:8000/api/ranges/1/batches" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
 
 ## Import Departments
 

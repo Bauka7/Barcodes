@@ -1,8 +1,14 @@
 from app.schemas.audit import AuditLogItem
 from app.schemas.barcode_range import BarcodeRangeRead
 from app.schemas.barcode import (
+    BarcodeCancelRequest,
+    BarcodeDepartmentInfo,
+    BarcodeDetailResponse,
+    BarcodeLifecycleListResponse,
+    BarcodeMarkUsedRequest,
     BarcodeNumberRequest,
     BarcodeNumberResponse,
+    BarcodeRangeInfo,
     GeneratedBarcodeItem,
     GeneratedBarcodeSearchResponse,
     GeneratedBatchDetail,
@@ -16,14 +22,21 @@ from app.schemas.range_request import (
     RangeRequestDecision,
     RangeRequestRead,
 )
+from app.schemas.range_generation import RangeGenerateRequest, RangeRemainingResponse
 from app.schemas.auth import Token, TokenData
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 
 __all__ = [
     "AuditLogItem",
+    "BarcodeCancelRequest",
+    "BarcodeDepartmentInfo",
+    "BarcodeDetailResponse",
+    "BarcodeLifecycleListResponse",
+    "BarcodeMarkUsedRequest",
     "BarcodeRangeRead",
     "BarcodeNumberRequest",
     "BarcodeNumberResponse",
+    "BarcodeRangeInfo",
     "ClientCreate",
     "ClientRead",
     "ClientUpdate",
@@ -38,6 +51,8 @@ __all__ = [
     "RangeRequestCreate",
     "RangeRequestDecision",
     "RangeRequestRead",
+    "RangeGenerateRequest",
+    "RangeRemainingResponse",
     "Token",
     "TokenData",
     "UserCreate",

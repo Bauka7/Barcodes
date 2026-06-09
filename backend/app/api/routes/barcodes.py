@@ -5,8 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db_session
 from app.models import GeneratedBarcode, GeneratedBatch, PrintedBatch, User
 from app.schemas import (
+    BarcodeCancelRequest,
+    BarcodeDepartmentInfo,
+    BarcodeDetailResponse,
+    BarcodeLifecycleListResponse,
+    BarcodeMarkUsedRequest,
     BarcodeNumberRequest,
     BarcodeNumberResponse,
+    BarcodeRangeInfo,
     GeneratedBarcodeItem,
     GeneratedBarcodeSearchResponse,
     GeneratedBatchDetail,
@@ -23,8 +29,15 @@ from app.services.barcode_number_service import (
     CounterNotFoundError,
     generate_barcode_numbers_with_history,
 )
-from app.services.audit_service import log_user_action
+from app.services.audit_service import create_audit_log, log_user_action
 from app.services.auth_service import require_roles
+from app.services.barcode_lifecycle_service import (
+    GeneratedBarcodeNotFoundError,
+    cancel_barcode,
+    get_barcode_detail,
+    list_barcodes_by_lifecycle,
+    mark_barcode_used,
+)
 from app.services.pdf_label_service import (
     GeneratedBatchNotFoundError,
     generate_batch_pdf_and_track_print,
@@ -100,6 +113,7 @@ def _batch_to_schema(batch: GeneratedBatch) -> GeneratedBatchItem:
         first_barcode=batch.first_barcode,
         last_barcode=batch.last_barcode,
         department_id=batch.department_id,
+        range_id=batch.range_id,
         generated_by=batch.generated_by,
         source=batch.source,
         status=batch.status,
@@ -115,9 +129,17 @@ def _barcode_to_schema(barcode: GeneratedBarcode) -> GeneratedBarcodeItem:
         barcode=barcode.barcode,
         package_type=barcode.package_type,
         department_id=barcode.department_id,
+        range_id=barcode.range_id,
         sequence_number=barcode.sequence_number,
         printed=barcode.printed,
         printed_at=barcode.printed_at,
+        status=barcode.status,
+        cancelled_at=barcode.cancelled_at,
+        cancelled_by=barcode.cancelled_by,
+        cancellation_reason=barcode.cancellation_reason,
+        used_at=barcode.used_at,
+        used_by=barcode.used_by,
+        usage_notes=barcode.usage_notes,
         generated_at=barcode.generated_at,
     )
 
@@ -147,6 +169,208 @@ def _pdf_response(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get(
+    "/lifecycle",
+    response_model=BarcodeLifecycleListResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_barcode_lifecycle_items(
+    status_filter: str | None = Query(default=None, alias="status"),
+    package_type: str | None = Query(default=None),
+    department_id: int | None = Query(default=None),
+    printed: bool | None = Query(default=None),
+    limit: int = Query(default=20),
+    offset: int = Query(default=0),
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator")),
+) -> BarcodeLifecycleListResponse:
+    try:
+        barcodes = await list_barcodes_by_lifecycle(
+            session=session,
+            status=status_filter,
+            package_type=package_type,
+            department_id=department_id,
+            printed=printed,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+    items = [_barcode_to_schema(barcode) for barcode in barcodes]
+    return BarcodeLifecycleListResponse(items=items, count=len(items))
+
+
+def _barcode_detail_to_schema(
+    barcode: GeneratedBarcode,
+    batch: GeneratedBatch,
+    barcode_range,
+    department,
+) -> BarcodeDetailResponse:
+    range_info = None
+    if barcode_range is not None:
+        range_info = BarcodeRangeInfo(
+            id=barcode_range.id,
+            package_type=barcode_range.package_type,
+            start_number=barcode_range.start_number,
+            end_number=barcode_range.end_number,
+            current_number=barcode_range.current_number,
+            status=barcode_range.status,
+        )
+
+    department_info = None
+    if department is not None:
+        department_info = BarcodeDepartmentInfo(
+            id=department.id,
+            code=department.code,
+            name=department.name,
+            region=department.region,
+        )
+
+    barcode_item = _barcode_to_schema(barcode)
+    return BarcodeDetailResponse(
+        **barcode_item.model_dump(),
+        batch=_batch_to_schema(batch),
+        range=range_info,
+        department=department_info,
+    )
+
+
+@router.get(
+    "/{barcode}/detail",
+    response_model=BarcodeDetailResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_barcode_detail_endpoint(
+    barcode: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator", "client")),
+) -> BarcodeDetailResponse:
+    try:
+        barcode_record, batch, barcode_range, department = await get_barcode_detail(
+            session=session,
+            barcode=barcode,
+        )
+    except GeneratedBarcodeNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    await log_user_action(
+        session=session,
+        action="barcode_detail_viewed",
+        user=current_user,
+        request=request,
+        entity_type="generated_barcode",
+        entity_id=str(barcode_record.id),
+        details={"barcode": barcode_record.barcode},
+    )
+
+    return _barcode_detail_to_schema(
+        barcode=barcode_record,
+        batch=batch,
+        barcode_range=barcode_range,
+        department=department,
+    )
+
+
+@router.post(
+    "/{barcode}/cancel",
+    response_model=GeneratedBarcodeItem,
+    status_code=status.HTTP_200_OK,
+)
+async def cancel_barcode_endpoint(
+    barcode: str,
+    payload: BarcodeCancelRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator")),
+) -> GeneratedBarcodeItem:
+    try:
+        async with session.begin():
+            barcode_record = await cancel_barcode(
+                session=session,
+                barcode=barcode,
+                current_user=current_user,
+                reason=payload.reason,
+            )
+            await create_audit_log(
+                session=session,
+                action="barcode_cancelled",
+                user=current_user,
+                request=request,
+                entity_type="generated_barcode",
+                entity_id=str(barcode_record.id),
+                details={
+                    "barcode": barcode_record.barcode,
+                    "reason": payload.reason,
+                },
+            )
+    except GeneratedBarcodeNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+    return _barcode_to_schema(barcode_record)
+
+
+@router.post(
+    "/{barcode}/mark-used",
+    response_model=GeneratedBarcodeItem,
+    status_code=status.HTTP_200_OK,
+)
+async def mark_barcode_used_endpoint(
+    barcode: str,
+    payload: BarcodeMarkUsedRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator")),
+) -> GeneratedBarcodeItem:
+    try:
+        async with session.begin():
+            barcode_record = await mark_barcode_used(
+                session=session,
+                barcode=barcode,
+                current_user=current_user,
+                notes=payload.notes,
+            )
+            await create_audit_log(
+                session=session,
+                action="barcode_marked_used",
+                user=current_user,
+                request=request,
+                entity_type="generated_barcode",
+                entity_id=str(barcode_record.id),
+                details={
+                    "barcode": barcode_record.barcode,
+                    "notes": payload.notes,
+                },
+            )
+    except GeneratedBarcodeNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+    return _barcode_to_schema(barcode_record)
 
 
 @router.get(

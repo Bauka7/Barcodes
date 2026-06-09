@@ -10,6 +10,7 @@ async def create_generation_history(
     barcodes: list[str],
     sequence_numbers: list[int],
     department_id: int | None = None,
+    range_id: int | None = None,
     generated_by: str | None = None,
     source: str = "api",
     notes: str | None = None,
@@ -33,6 +34,7 @@ async def create_generation_history(
         first_barcode=barcodes[0],
         last_barcode=barcodes[-1],
         department_id=department_id,
+        range_id=range_id,
         generated_by=generated_by,
         source=source,
         status="generated",
@@ -48,6 +50,7 @@ async def create_generation_history(
                 barcode=barcode,
                 package_type=package_type,
                 department_id=department_id,
+                range_id=range_id,
                 sequence_number=sequence_number,
             )
         )

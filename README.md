@@ -23,7 +23,8 @@ Implemented:
 - Authentication with JWT access tokens.
 - Roles: `admin`, `operator`, `client`.
 - Audit logging for important user actions.
-- Clients, range requests, and barcode range allocation foundation.
+- Clients, range requests, barcode range allocation, and SHPI generation from allocated ranges.
+- Individual barcode lifecycle tracking.
 
 Not implemented yet:
 
@@ -31,7 +32,6 @@ Not implemented yet:
 - Direct OS printer control.
 - Multi-label pages.
 - Advanced reports/export.
-- Generation from allocated ranges.
 
 ## Tech Stack
 
@@ -137,7 +137,7 @@ Import legacy departments from DBF:
 python -m app.db.import_departments
 ```
 
-The range workflow also uses the same `barcode_counters` table. Approving a range request increments the package counter, but it does not create individual `GeneratedBarcode` rows yet.
+The range workflow also uses the same `barcode_counters` table. Approving a range request reserves numbers by incrementing the package counter. Generating from a range later creates `GeneratedBatch` and `GeneratedBarcode` rows with `source = "range"`.
 
 ## Run Backend
 
@@ -234,6 +234,38 @@ curl "http://127.0.0.1:8000/api/barcodes/history/search?barcode=KG010000019KZ" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
+Detailed SHPI lookup:
+
+```powershell
+curl "http://127.0.0.1:8000/api/barcodes/KG010000019KZ/detail" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+List barcodes by lifecycle status:
+
+```powershell
+curl "http://127.0.0.1:8000/api/barcodes/lifecycle?status=printed&limit=20&offset=0" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+Cancel a barcode, admin/operator only:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/barcodes/KG010000019KZ/cancel" `
+  -H "Content-Type: application/json" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -d "{\"reason\":\"wrong print\"}"
+```
+
+Mark a barcode as used, admin/operator only:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/barcodes/KG010000019KZ/mark-used" `
+  -H "Content-Type: application/json" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -d "{\"notes\":\"accepted in PUS\"}"
+```
+
 List print history:
 
 ```powershell
@@ -282,6 +314,29 @@ curl "http://127.0.0.1:8000/api/ranges?package_type=KG&status=active" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
+Check remaining numbers in a range:
+
+```powershell
+curl "http://127.0.0.1:8000/api/ranges/1/remaining" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+Generate SHPI from an allocated range:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/ranges/1/generate" `
+  -H "Content-Type: application/json" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -d "{\"quantity\":10,\"notes\":\"range test\"}"
+```
+
+List batches generated from a range:
+
+```powershell
+curl "http://127.0.0.1:8000/api/ranges/1/batches" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
 Audit logs, admin only:
 
 ```powershell
@@ -314,7 +369,13 @@ Rules:
 - Quantity must be from `1` to `1000`.
 - Counter update and history insert are atomic.
 - Range approval also uses `SELECT FOR UPDATE` on `barcode_counters`.
-- Range approval creates a `barcode_ranges` row but does not generate SHPI records yet.
+- Range approval creates a `barcode_ranges` row.
+- Range generation uses `SELECT FOR UPDATE` on `barcode_ranges`.
+- Range generation creates `GeneratedBatch` and `GeneratedBarcode` rows linked by `range_id`.
+- When all numbers are consumed, range status becomes `exhausted`.
+- Barcode lifecycle status is one of `generated`, `printed`, `used`, `cancelled`.
+- Printing moves `generated` barcodes to `printed`, but does not overwrite `used` or `cancelled`.
+- Used barcodes cannot be cancelled; cancelled barcodes cannot be marked used.
 
 ## Legacy Files
 

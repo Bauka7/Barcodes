@@ -35,6 +35,8 @@ async def create_printed_batch(
     for barcode in barcodes:
         barcode.printed = True
         barcode.printed_at = now
+        if barcode.status not in {"used", "cancelled"}:
+            barcode.status = "printed"
 
     await session.flush()
     return printed_batch
