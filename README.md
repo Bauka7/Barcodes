@@ -25,10 +25,10 @@ Implemented:
 - Audit logging for important user actions.
 - Clients, range requests, barcode range allocation, and SHPI generation from allocated ranges.
 - Individual barcode lifecycle tracking.
+- Frontend MVP for login, departments, generation, history, search, PDF preview/download, and print history.
 
 Not implemented yet:
 
-- Frontend.
 - Direct OS printer control.
 - Multi-label pages.
 - Advanced reports/export.
@@ -49,6 +49,9 @@ Not implemented yet:
 - passlib[bcrypt]
 - python-jose[cryptography]
 - python-multipart
+- Vite + React + TypeScript frontend
+- Axios
+- React Router
 
 ## Project Structure
 
@@ -68,6 +71,10 @@ QazPostWeb/
     alembic.ini
     requirements.txt
     README.md
+  frontend/
+    src/
+    package.json
+    vite.config.ts
   JavaCode/
   PROJECT_STATE.md
   README.md
@@ -157,6 +164,47 @@ Swagger UI:
 
 ```text
 http://127.0.0.1:8000/docs
+```
+
+## Docker Run
+
+Docker uses its own PostgreSQL container and a separate named volume, so it does not share data with the local database on `localhost:5432`.
+
+From the repository root:
+
+```powershell
+docker compose up --build
+```
+
+Docker services:
+
+- Backend: `http://localhost:8000`
+- Docker PostgreSQL: `localhost:5433`
+
+The backend container applies Alembic migrations, runs seed data, creates the default admin, and adds a small dev department tree before starting Uvicorn. Local development remains unchanged: `backend/.env`, local PostgreSQL on `localhost:5432`, and local Uvicorn usage stay as before.
+
+## Frontend Run
+
+Start the backend first, then run the frontend from a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend:
+
+```text
+http://127.0.0.1:5173
+```
+
+The dev server proxies `/api` to `http://127.0.0.1:8000`, so no backend CORS change is needed. Default Docker/local development credentials are `admin` / `admin123` after `python -m app.db.create_admin` or Docker startup.
+
+Optional frontend env:
+
+```text
+VITE_API_BASE_URL=/api
 ```
 
 ## PDF Font Setup
