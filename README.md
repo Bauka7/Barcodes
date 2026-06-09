@@ -159,6 +159,23 @@ Swagger UI:
 http://127.0.0.1:8000/docs
 ```
 
+## Docker Run
+
+Docker uses its own PostgreSQL container and a separate named volume, so it does not share data with the local database on `localhost:5432`.
+
+From the repository root:
+
+```powershell
+docker compose up --build
+```
+
+Docker services:
+
+- Backend: `http://localhost:8000`
+- Docker PostgreSQL: `localhost:5433`
+
+The backend container applies Alembic migrations and runs seed data before starting Uvicorn. Local development remains unchanged: `backend/.env`, local PostgreSQL on `localhost:5432`, and local Uvicorn usage stay as before.
+
 ## PDF Font Setup
 
 PDF labels use `DejaVuSans.ttf` for Cyrillic and Kazakh department names.
