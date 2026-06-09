@@ -2,3 +2,7 @@ JavaCode/
 backend/.env
 __pycache__/
 *.pyc
+frontend/node_modules/
+frontend/dist/
+frontend/vite-dev.*.log
+backend/app/db/seed_departments_dev.py
