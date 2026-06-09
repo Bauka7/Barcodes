@@ -6,16 +6,36 @@ from app.db.database import AsyncSessionLocal
 from app.models import AppSetting, BarcodeCounter
 
 DEFAULT_PACKAGE_TYPES = [
-    "GP",
+    "VC",
+    "KG",
+    "ON",
+    "AD",
+    "BP",
     "CE",
+    "GF",
+    "RZ",
     "AV",
     "UP",
+    "CP",
+    "CZ",
+    "RC",
+    "CC",
+    "VR",
+    "CV",
+    "MM",
+    "UB",
+    "PP",
+    "DQ",
+    "UE",
+    "UO",
+    "CF",
+    "RW",
+    "RG",
+    "LR",
+    "GP",
     "CO",
     "GB",
-    "CZ",
-    "GF",
     "RR",
-    "RZ",
 ]
 
 DEFAULT_SETTINGS = {
@@ -26,7 +46,9 @@ DEFAULT_SETTINGS = {
     "default_left_margin": "10",
     "default_top_margin": "10",
     "barcode_scale": "1.0",
+    "obl_code": "01",
     "country_suffix": "KZ",
+    "legacy_dbf_path": r"C:\QazPost\BarCodes new\Dbf_win.dbf",
 }
 
 
