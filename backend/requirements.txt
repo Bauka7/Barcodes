@@ -8,3 +8,6 @@ pydantic-settings
 python-dotenv
 dbfread
 reportlab
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart

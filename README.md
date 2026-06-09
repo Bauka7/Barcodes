@@ -20,14 +20,18 @@ Implemented:
 - Legacy `options.ini` counter/settings import.
 - PDF label preview and downloadable PDF generation.
 - Print history tracking.
+- Authentication with JWT access tokens.
+- Roles: `admin`, `operator`, `client`.
+- Audit logging for important user actions.
+- Clients, range requests, and barcode range allocation foundation.
 
 Not implemented yet:
 
-- Authentication.
 - Frontend.
 - Direct OS printer control.
 - Multi-label pages.
 - Advanced reports/export.
+- Generation from allocated ranges.
 
 ## Tech Stack
 
@@ -42,6 +46,9 @@ Not implemented yet:
 - python-dotenv
 - dbfread
 - reportlab
+- passlib[bcrypt]
+- python-jose[cryptography]
+- python-multipart
 
 ## Project Structure
 
@@ -89,7 +96,12 @@ Set your PostgreSQL connection string in `backend/.env`:
 
 ```text
 DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/barcode_db
+SECRET_KEY=change-this-local-development-secret
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+ALGORITHM=HS256
 ```
+
+Change `SECRET_KEY` to a long random private value outside local development.
 
 ## Database Setup
 
@@ -105,6 +117,14 @@ Seed default counters and settings:
 python -m app.db.seed
 ```
 
+Create the default admin:
+
+```powershell
+python -m app.db.create_admin
+```
+
+Default local credentials are `admin` / `admin123`. Change this password immediately.
+
 Import real legacy counters and settings from `options.ini`:
 
 ```powershell
@@ -116,6 +136,8 @@ Import legacy departments from DBF:
 ```powershell
 python -m app.db.import_departments
 ```
+
+The range workflow also uses the same `barcode_counters` table. Approving a range request increments the package counter, but it does not create individual `GeneratedBarcode` rows yet.
 
 ## Run Backend
 
@@ -155,6 +177,16 @@ DEJAVU_SANS_FONT_PATH=C:\path\to\DejaVuSans.ttf
 
 ## Important API Examples
 
+Login:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/auth/login" `
+  -H "Content-Type: application/x-www-form-urlencoded" `
+  -d "username=admin&password=admin123"
+```
+
+In Swagger, click `Authorize` and use the same username/password.
+
 Health check:
 
 ```powershell
@@ -166,13 +198,16 @@ Generate SHPI numbers:
 ```powershell
 curl -X POST "http://127.0.0.1:8000/api/barcodes/numbers" `
   -H "Content-Type: application/json" `
-  -d "{\"package_type\":\"KG\",\"quantity\":4,\"department_id\":50,\"generated_by\":\"test_user\",\"notes\":\"manual test\"}"
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -d "{\"package_type\":\"KG\",\"quantity\":4,\"department_id\":50,\"notes\":\"manual test\"}"
 ```
 
 Preview PDF without marking barcodes as printed:
 
 ```powershell
-curl -o preview.pdf "http://127.0.0.1:8000/api/barcodes/batches/1/pdf-preview"
+curl "http://127.0.0.1:8000/api/barcodes/batches/1/pdf-preview" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -o preview.pdf
 ```
 
 Generate PDF and mark batch as printed:
@@ -180,32 +215,78 @@ Generate PDF and mark batch as printed:
 ```powershell
 curl -X POST "http://127.0.0.1:8000/api/barcodes/batches/1/pdf" `
   -H "Content-Type: application/json" `
-  -d "{\"printed_by\":\"test_user\",\"printer_name\":\"Zebra S4M\",\"notes\":\"first print\"}" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -d "{\"printer_name\":\"Zebra S4M\",\"notes\":\"first print\"}" `
   -o barcodes_batch_1.pdf
 ```
 
 List generation history:
 
 ```powershell
-curl "http://127.0.0.1:8000/api/barcodes/history/batches?limit=20&offset=0"
+curl "http://127.0.0.1:8000/api/barcodes/history/batches?limit=20&offset=0" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 Search generated SHPI:
 
 ```powershell
-curl "http://127.0.0.1:8000/api/barcodes/history/search?barcode=KG010000019KZ"
+curl "http://127.0.0.1:8000/api/barcodes/history/search?barcode=KG010000019KZ" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 List print history:
 
 ```powershell
-curl "http://127.0.0.1:8000/api/barcodes/print-history?limit=20&offset=0"
+curl "http://127.0.0.1:8000/api/barcodes/print-history?limit=20&offset=0" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 Department tree:
 
 ```powershell
-curl "http://127.0.0.1:8000/api/departments/tree"
+curl "http://127.0.0.1:8000/api/departments/tree" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+Create client, admin only:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/clients" `
+  -H "Content-Type: application/json" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -d "{\"name\":\"Test Client\",\"contact_person\":\"Ayan\",\"contact_phone\":\"+77000000000\"}"
+```
+
+Create range request:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/range-requests" `
+  -H "Content-Type: application/json" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -d "{\"client_id\":1,\"package_type\":\"KG\",\"requested_quantity\":100,\"notes\":\"initial allocation\"}"
+```
+
+Approve range request, admin/operator only:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/range-requests/1/approve" `
+  -H "Content-Type: application/json" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
+  -d "{\"notes\":\"approved\"}"
+```
+
+List ranges, admin/operator only:
+
+```powershell
+curl "http://127.0.0.1:8000/api/ranges?package_type=KG&status=active" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+Audit logs, admin only:
+
+```powershell
+curl "http://127.0.0.1:8000/api/audit-logs?limit=20&offset=0" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 ## Barcode Format
@@ -232,6 +313,8 @@ Rules:
 - Default `country_suffix` is `KZ`.
 - Quantity must be from `1` to `1000`.
 - Counter update and history insert are atomic.
+- Range approval also uses `SELECT FOR UPDATE` on `barcode_counters`.
+- Range approval creates a `barcode_ranges` row but does not generate SHPI records yet.
 
 ## Legacy Files
 
@@ -251,6 +334,6 @@ Do not modify them from the new backend.
 - Put business logic in services.
 - Use async database sessions.
 - Add models to `app/models/__init__.py` so Alembic sees them.
-- Do not add authentication, frontend, Docker, or printer control unless explicitly requested.
+- Do not add frontend, Docker, or printer control unless explicitly requested.
 - Do not commit `backend/.env`.
 - Do not commit `JavaCode/`.

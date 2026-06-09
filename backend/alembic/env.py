@@ -8,11 +8,16 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.models import (
     AppSetting,
+    AuditLog,
+    BarcodeRange,
     BarcodeCounter,
+    Client,
     Department,
     GeneratedBarcode,
     GeneratedBatch,
     PrintedBatch,
+    RangeRequest,
+    User,
 )
 
 config = context.config

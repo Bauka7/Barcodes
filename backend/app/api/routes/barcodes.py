@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db_session
-from app.models import GeneratedBarcode, GeneratedBatch, PrintedBatch
+from app.models import GeneratedBarcode, GeneratedBatch, PrintedBatch, User
 from app.schemas import (
     BarcodeNumberRequest,
     BarcodeNumberResponse,
@@ -23,6 +23,8 @@ from app.services.barcode_number_service import (
     CounterNotFoundError,
     generate_barcode_numbers_with_history,
 )
+from app.services.audit_service import log_user_action
+from app.services.auth_service import require_roles
 from app.services.pdf_label_service import (
     GeneratedBatchNotFoundError,
     generate_batch_pdf_and_track_print,
@@ -36,7 +38,9 @@ router = APIRouter(prefix="/barcodes", tags=["barcodes"])
 @router.post("/numbers", response_model=BarcodeNumberResponse, status_code=status.HTTP_200_OK)
 async def create_barcode_numbers(
     payload: BarcodeNumberRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> BarcodeNumberResponse:
     try:
         result = await generate_barcode_numbers_with_history(
@@ -44,7 +48,7 @@ async def create_barcode_numbers(
             package_type=payload.package_type,
             quantity=payload.quantity,
             department_id=payload.department_id,
-            generated_by=payload.generated_by,
+            generated_by=current_user.username if current_user else payload.generated_by,
             notes=payload.notes,
         )
     except CounterNotFoundError as error:
@@ -62,6 +66,22 @@ async def create_barcode_numbers(
             status_code=status.HTTP_409_CONFLICT,
             detail="Generated barcode already exists. The transaction was rolled back.",
         ) from error
+
+    await log_user_action(
+        session=session,
+        action="barcode_generated",
+        user=current_user,
+        request=request,
+        entity_type="generated_batch",
+        entity_id=str(result.batch_id),
+        details={
+            "package_type": payload.package_type,
+            "quantity": payload.quantity,
+            "department_id": payload.department_id,
+            "first_barcode": result.first_barcode,
+            "last_barcode": result.last_barcode,
+        },
+    )
 
     return BarcodeNumberResponse(
         batch_id=result.batch_id,
@@ -140,6 +160,7 @@ async def get_generation_batches(
     package_type: str | None = Query(default=None),
     department_id: int | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator")),
 ) -> list[GeneratedBatchItem]:
     try:
         batches = await list_batches(
@@ -166,6 +187,7 @@ async def get_generation_batches(
 async def get_generation_batch_detail(
     batch_id: int,
     session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator")),
 ) -> GeneratedBatchDetail:
     result = await get_batch_detail(session=session, batch_id=batch_id)
 
@@ -191,6 +213,7 @@ async def get_generation_batch_detail(
 async def search_generated_barcode(
     barcode: str = Query(...),
     session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator")),
 ) -> GeneratedBarcodeSearchResponse:
     result = await search_barcode(session=session, barcode=barcode)
 
@@ -215,7 +238,9 @@ async def search_generated_barcode(
 )
 async def preview_batch_pdf(
     batch_id: int,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> Response:
     try:
         pdf_bytes = await generate_batch_pdf_preview(
@@ -233,6 +258,15 @@ async def preview_batch_pdf(
             detail=str(error),
         ) from error
 
+    await log_user_action(
+        session=session,
+        action="pdf_preview_generated",
+        user=current_user,
+        request=request,
+        entity_type="generated_batch",
+        entity_id=str(batch_id),
+    )
+
     return _pdf_response(
         pdf_bytes=pdf_bytes,
         filename=f"barcodes_batch_{batch_id}_preview.pdf",
@@ -247,13 +281,15 @@ async def preview_batch_pdf(
 async def print_batch_pdf(
     batch_id: int,
     payload: PrintBatchRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator")),
 ) -> Response:
     try:
         pdf_bytes = await generate_batch_pdf_and_track_print(
             session=session,
             batch_id=batch_id,
-            printed_by=payload.printed_by,
+            printed_by=current_user.username if current_user else payload.printed_by,
             printer_name=payload.printer_name,
             notes=payload.notes,
         )
@@ -267,6 +303,16 @@ async def print_batch_pdf(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
         ) from error
+
+    await log_user_action(
+        session=session,
+        action="batch_printed",
+        user=current_user,
+        request=request,
+        entity_type="generated_batch",
+        entity_id=str(batch_id),
+        details={"printer_name": payload.printer_name},
+    )
 
     return _pdf_response(
         pdf_bytes=pdf_bytes,
@@ -285,6 +331,7 @@ async def get_print_history(
     department_id: int | None = Query(default=None),
     generated_batch_id: int | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator")),
 ) -> list[PrintedBatchItem]:
     try:
         printed_batches = await list_print_history(

@@ -15,14 +15,18 @@ The backend currently supports:
 - Legacy `options.ini` import for real counters and settings.
 - PDF label generation for generated batches.
 - Print tracking without controlling the operating system printer.
+- JWT authentication.
+- Roles: `admin`, `operator`, `client`.
+- Audit logging for important user actions.
+- Clients, range requests, and barcode range allocation foundation.
 
 The backend intentionally does not include:
 
-- Authentication.
 - Frontend.
 - Docker.
 - Direct printer control.
 - PDF/image generation beyond the current downloadable PDF labels.
+- Generation from allocated ranges.
 
 ## Tech Stack
 
@@ -37,6 +41,9 @@ The backend intentionally does not include:
 - python-dotenv
 - dbfread
 - reportlab
+- passlib[bcrypt]
+- python-jose[cryptography]
+- python-multipart
 
 ## Architecture
 
@@ -187,6 +194,118 @@ Fields:
 - `printed_at`
 - `notes`
 
+### User
+
+Table: `users`
+
+Fields:
+
+- `id`
+- `username`
+- `hashed_password`
+- `full_name`
+- `role`
+- `department_id`
+- `is_active`
+- `created_at`
+- `updated_at`
+
+Roles are `admin`, `operator`, and `client`.
+
+### AuditLog
+
+Table: `audit_logs`
+
+Fields:
+
+- `id`
+- `user_id`
+- `username`
+- `action`
+- `entity_type`
+- `entity_id`
+- `ip_address`
+- `user_agent`
+- `details`
+- `created_at`
+
+### Client
+
+Table: `clients`
+
+Fields:
+
+- `id`
+- `name`
+- `contact_person`
+- `contact_phone`
+- `email`
+- `notes`
+- `is_active`
+- `created_at`
+- `updated_at`
+
+### RangeRequest
+
+Table: `range_requests`
+
+Represents a request to allocate a numeric barcode counter range.
+
+Fields:
+
+- `id`
+- `requester_id`
+- `client_id`
+- `department_id`
+- `package_type`
+- `requested_quantity`
+- `request_type`
+- `payload`
+- `status`
+- `handled_by`
+- `handled_at`
+- `notes`
+- `created_at`
+- `updated_at`
+
+Statuses:
+
+- `pending`
+- `approved`
+- `rejected`
+- `cancelled`
+
+### BarcodeRange
+
+Table: `barcode_ranges`
+
+Represents an approved numeric range reserved from the package counter.
+
+Fields:
+
+- `id`
+- `package_type`
+- `start_number`
+- `end_number`
+- `current_number`
+- `status`
+- `issued_to_client_id`
+- `issued_to_department_id`
+- `request_id`
+- `issued_by`
+- `issued_at`
+- `expires_at`
+- `notes`
+- `created_at`
+- `updated_at`
+
+Statuses:
+
+- `active`
+- `exhausted`
+- `expired`
+- `cancelled`
+
 ## Implemented Endpoints
 
 All API routes are mounted under `/api`.
@@ -203,11 +322,86 @@ Returns:
 {"status": "ok"}
 ```
 
+### Authentication
+
+```http
+POST /api/auth/login
+```
+
+OAuth2 password flow compatible with Swagger `Authorize`.
+
+```http
+GET /api/auth/me
+```
+
+Returns the current authenticated user.
+
+### Users
+
+Admin only:
+
+```http
+POST /api/users
+GET /api/users
+GET /api/users/{user_id}
+PATCH /api/users/{user_id}
+```
+
+### Audit Logs
+
+Admin only:
+
+```http
+GET /api/audit-logs
+```
+
+Query params:
+
+- `limit`, default `20`, max `100`
+- `offset`, default `0`
+- `action`, optional
+- `username`, optional
+
+### Clients
+
+Admin/operator can read. Admin can create/update.
+
+```http
+GET /api/clients
+POST /api/clients
+GET /api/clients/{client_id}
+PATCH /api/clients/{client_id}
+```
+
+### Range Requests
+
+Admin/operator can create, read, approve, reject, and cancel. Client can create and read own requests only.
+
+```http
+POST /api/range-requests
+GET /api/range-requests
+GET /api/range-requests/{request_id}
+POST /api/range-requests/{request_id}/approve
+POST /api/range-requests/{request_id}/reject
+POST /api/range-requests/{request_id}/cancel
+```
+
+### Ranges
+
+Admin/operator only.
+
+```http
+GET /api/ranges
+GET /api/ranges/{range_id}
+```
+
 ### Barcode Generation
 
 ```http
 POST /api/barcodes/numbers
 ```
+
+Allowed roles: `admin`, `operator`, `client`.
 
 Request:
 
@@ -239,6 +433,8 @@ Response:
 GET /api/barcodes/history/batches
 ```
 
+Allowed roles: `admin`, `operator`.
+
 Query params:
 
 - `limit`, default `20`, max handled in service as `100`
@@ -264,11 +460,15 @@ Returns the generated barcode record plus batch info.
 GET /api/barcodes/batches/{batch_id}/pdf-preview
 ```
 
+Allowed roles: `admin`, `operator`, `client`.
+
 Generates a PDF for preview/testing. Does not update printed flags and does not create print history.
 
 ```http
 POST /api/barcodes/batches/{batch_id}/pdf
 ```
+
+Allowed roles: `admin`, `operator`.
 
 Request:
 
@@ -296,6 +496,8 @@ Also:
 GET /api/barcodes/print-history
 ```
 
+Allowed roles: `admin`, `operator`.
+
 Query params:
 
 - `limit`, default `20`, max handled in service as `100`
@@ -320,6 +522,8 @@ GET /api/departments/tree
 ```
 
 Returns department hierarchy.
+
+Department read endpoints require any authenticated active user.
 
 ## Barcode Generation Rules
 
@@ -354,6 +558,8 @@ Rules:
 - Batch generation locks the counter once and increments it by the full quantity.
 - Counter update, generated batch insert, and generated barcode inserts happen in one transaction.
 - Duplicate SHPI are prevented by counter locking and the unique `generated_barcodes.barcode` constraint.
+- Range approval also locks the package counter with `SELECT FOR UPDATE`.
+- Range approval increments `BarcodeCounter.current_value` and creates `BarcodeRange`, but does not create `GeneratedBarcode` rows yet.
 
 Check digit algorithm:
 
@@ -447,6 +653,68 @@ Print tracking behavior:
 - If DB update fails, the request fails instead of returning success.
 - A batch can currently be printed more than once; each print action creates another `PrintedBatch`.
 
+## Authentication and Audit
+
+Auth uses JWT bearer access tokens.
+
+Settings:
+
+- `SECRET_KEY`
+- `ACCESS_TOKEN_EXPIRE_MINUTES`
+- `ALGORITHM`, default `HS256`
+
+Local admin bootstrap:
+
+```powershell
+python -m app.db.create_admin
+```
+
+Default local credentials:
+
+```text
+admin / admin123
+```
+
+The default password and local `SECRET_KEY` must be changed outside local development.
+
+Audit actions currently logged:
+
+- `login_success`
+- `login_failed`
+- `user_created`
+- `user_updated`
+- `barcode_generated`
+- `pdf_preview_generated`
+- `batch_printed`
+- `client_created`
+- `range_request_created`
+- `range_request_approved`
+- `range_request_rejected`
+- `range_request_cancelled`
+- `range_created`
+
+## Range Allocation Foundation
+
+The range workflow is a first step toward controlled client/department SHPI allocation.
+
+Approval behavior:
+
+- request must be `pending`;
+- package counter row is locked with `SELECT FOR UPDATE`;
+- `start_number = BarcodeCounter.current_value + 1`;
+- `end_number = BarcodeCounter.current_value + requested_quantity`;
+- `BarcodeCounter.current_value` is updated to `end_number`;
+- `BarcodeRange.current_number` starts at `start_number`;
+- request is marked `approved`;
+- `handled_by` and `handled_at` are set;
+- individual `GeneratedBarcode` rows are not created during approval yet.
+
+Range permissions:
+
+- `admin`: all range/client operations.
+- `operator`: view clients, create/view/handle requests, view ranges.
+- `client`: create/view own requests only.
+
 ## Migration System
 
 Alembic is configured for SQLAlchemy metadata autogeneration.
@@ -457,6 +725,8 @@ Migration files:
 - `0002_add_department_hierarchy_fields.py`
 - `0003_add_generation_history.py`
 - `0004_add_printed_batches.py`
+- `0005_add_auth_and_audit.py`
+- `0006_add_clients_and_ranges.py`
 
 Common commands from `backend/`:
 
@@ -480,9 +750,9 @@ When adding models, register them in `app/models/__init__.py` so Alembic can see
 - Missing counter row should return a clear error.
 - Invalid input should return HTTP 400.
 - Missing batch/history rows should return HTTP 404.
-- Do not add authentication until explicitly requested.
 - Do not add frontend until explicitly requested.
 - Do not add direct printer control.
+- Protected endpoint roles should stay simple until more detailed permissions are requested.
 
 ## Pending Roadmap
 
@@ -493,9 +763,11 @@ Likely future work:
 - Add barcode image generation if required by frontend.
 - Add print reprint rules and print status workflow.
 - Add filtering/report endpoints for generated SHPI accounting.
+- Integrate SHPI generation from allocated ranges.
+- Add range exhaustion and expiration handling.
 - Add CSV/Excel export for reports.
 - Add CRUD/admin endpoints for settings and counters.
-- Add authentication and audit identity when requested.
+- Extend authentication with password changes and finer permissions if requested.
 - Add tests for barcode generation, imports, PDF generation, and history.
 - Add frontend after backend contracts stabilize.
 

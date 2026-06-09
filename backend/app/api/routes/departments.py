@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db_session
+from app.models import User
 from app.schemas import DepartmentItem, DepartmentTreeItem
+from app.services.auth_service import get_current_user
 from app.services.department_service import get_departments_tree, list_departments
 
 router = APIRouter(prefix="/departments", tags=["departments"])
@@ -14,6 +16,7 @@ async def get_departments(
     limit: int = Query(default=100),
     offset: int = Query(default=0),
     session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
 ) -> list[DepartmentItem]:
     try:
         departments = await list_departments(
@@ -45,6 +48,7 @@ async def get_departments(
 @router.get("/tree", response_model=list[DepartmentTreeItem], status_code=status.HTTP_200_OK)
 async def get_department_tree(
     session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
 ) -> list[DepartmentTreeItem]:
     items = await get_departments_tree(session=session)
     return [DepartmentTreeItem.model_validate(item) for item in items]
