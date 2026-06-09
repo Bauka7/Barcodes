@@ -7,6 +7,7 @@ from app.schemas.barcode import (
     GeneratedBatchItem,
 )
 from app.schemas.department import DepartmentItem, DepartmentTreeItem
+from app.schemas.print import PrintedBatchItem, PrintBatchRequest
 
 __all__ = [
     "BarcodeNumberRequest",
@@ -17,4 +18,6 @@ __all__ = [
     "GeneratedBarcodeSearchResponse",
     "GeneratedBatchDetail",
     "GeneratedBatchItem",
+    "PrintedBatchItem",
+    "PrintBatchRequest",
 ]

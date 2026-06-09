@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db_session
-from app.models import GeneratedBarcode, GeneratedBatch
+from app.models import GeneratedBarcode, GeneratedBatch, PrintedBatch
 from app.schemas import (
     BarcodeNumberRequest,
     BarcodeNumberResponse,
@@ -11,6 +11,8 @@ from app.schemas import (
     GeneratedBarcodeSearchResponse,
     GeneratedBatchDetail,
     GeneratedBatchItem,
+    PrintedBatchItem,
+    PrintBatchRequest,
 )
 from app.services.barcode_history_service import (
     get_batch_detail,
@@ -21,6 +23,12 @@ from app.services.barcode_number_service import (
     CounterNotFoundError,
     generate_barcode_numbers_with_history,
 )
+from app.services.pdf_label_service import (
+    GeneratedBatchNotFoundError,
+    generate_batch_pdf_and_track_print,
+    generate_batch_pdf_preview,
+)
+from app.services.print_tracking_service import list_print_history
 
 router = APIRouter(prefix="/barcodes", tags=["barcodes"])
 
@@ -91,6 +99,33 @@ def _barcode_to_schema(barcode: GeneratedBarcode) -> GeneratedBarcodeItem:
         printed=barcode.printed,
         printed_at=barcode.printed_at,
         generated_at=barcode.generated_at,
+    )
+
+
+def _printed_batch_to_schema(printed_batch: PrintedBatch) -> PrintedBatchItem:
+    return PrintedBatchItem(
+        id=printed_batch.id,
+        generated_batch_id=printed_batch.generated_batch_id,
+        department_id=printed_batch.department_id,
+        printed_count=printed_batch.printed_count,
+        first_barcode=printed_batch.first_barcode,
+        last_barcode=printed_batch.last_barcode,
+        printed_by=printed_batch.printed_by,
+        printer_name=printed_batch.printer_name,
+        status=printed_batch.status,
+        printed_at=printed_batch.printed_at,
+        notes=printed_batch.notes,
+    )
+
+
+def _pdf_response(
+    pdf_bytes: bytes,
+    filename: str,
+) -> Response:
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -171,3 +206,98 @@ async def search_generated_barcode(
         **barcode_item.model_dump(),
         batch=_batch_to_schema(batch),
     )
+
+
+@router.get(
+    "/batches/{batch_id}/pdf-preview",
+    response_class=Response,
+    status_code=status.HTTP_200_OK,
+)
+async def preview_batch_pdf(
+    batch_id: int,
+    session: AsyncSession = Depends(get_db_session),
+) -> Response:
+    try:
+        pdf_bytes = await generate_batch_pdf_preview(
+            session=session,
+            batch_id=batch_id,
+        )
+    except GeneratedBatchNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+    return _pdf_response(
+        pdf_bytes=pdf_bytes,
+        filename=f"barcodes_batch_{batch_id}_preview.pdf",
+    )
+
+
+@router.post(
+    "/batches/{batch_id}/pdf",
+    response_class=Response,
+    status_code=status.HTTP_200_OK,
+)
+async def print_batch_pdf(
+    batch_id: int,
+    payload: PrintBatchRequest,
+    session: AsyncSession = Depends(get_db_session),
+) -> Response:
+    try:
+        pdf_bytes = await generate_batch_pdf_and_track_print(
+            session=session,
+            batch_id=batch_id,
+            printed_by=payload.printed_by,
+            printer_name=payload.printer_name,
+            notes=payload.notes,
+        )
+    except GeneratedBatchNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+    return _pdf_response(
+        pdf_bytes=pdf_bytes,
+        filename=f"barcodes_batch_{batch_id}.pdf",
+    )
+
+
+@router.get(
+    "/print-history",
+    response_model=list[PrintedBatchItem],
+    status_code=status.HTTP_200_OK,
+)
+async def get_print_history(
+    limit: int = Query(default=20),
+    offset: int = Query(default=0),
+    department_id: int | None = Query(default=None),
+    generated_batch_id: int | None = Query(default=None),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[PrintedBatchItem]:
+    try:
+        printed_batches = await list_print_history(
+            session=session,
+            limit=limit,
+            offset=offset,
+            department_id=department_id,
+            generated_batch_id=generated_batch_id,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+    return [_printed_batch_to_schema(printed_batch) for printed_batch in printed_batches]

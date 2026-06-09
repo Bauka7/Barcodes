@@ -25,7 +25,15 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-The department import uses `dbfread`, which is already included in `requirements.txt`.
+The department import uses `dbfread`, and PDF label generation uses `reportlab`. Both are included in `requirements.txt`.
+
+PDF labels use `DejaVuSans.ttf` so Cyrillic and Kazakh department names render correctly. Place the font file here:
+
+```text
+backend/assets/fonts/DejaVuSans.ttf
+```
+
+Alternatively, set `DEJAVU_SANS_FONT_PATH` to the full path of `DejaVuSans.ttf`.
 
 Create your local environment file:
 
@@ -136,6 +144,33 @@ Search one generated SHPI:
 
 ```powershell
 curl "http://127.0.0.1:8000/api/barcodes/history/search?barcode=KG010000019KZ"
+```
+
+## PDF Labels
+
+Before generating PDF labels, make sure `DejaVuSans.ttf` exists at `backend/assets/fonts/DejaVuSans.ttf` or configure `DEJAVU_SANS_FONT_PATH`.
+
+Preview a generated batch as PDF without changing print status:
+
+```powershell
+curl -o preview.pdf "http://127.0.0.1:8000/api/barcodes/batches/1/pdf-preview"
+```
+
+Generate a downloadable PDF and mark the batch barcodes as printed:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/barcodes/batches/1/pdf" `
+  -H "Content-Type: application/json" `
+  -d "{\"printed_by\":\"test_user\",\"printer_name\":\"Zebra S4M\",\"notes\":\"first print\"}" `
+  -o barcodes_batch_1.pdf
+```
+
+The backend does not control the OS printer. It returns a PDF file for the user or frontend to print.
+
+Print history:
+
+```powershell
+curl "http://127.0.0.1:8000/api/barcodes/print-history?limit=20&offset=0"
 ```
 
 ## Import Departments
