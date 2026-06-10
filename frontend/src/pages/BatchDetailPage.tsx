@@ -1,151 +1,95 @@
-import { FileText, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { getBatchDetail } from '../api/barcodes';
+import type { GeneratedBarcodeItem } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
+import { useDepartmentName } from '../lib/departmentName';
+import { DataTable, type Column } from '../components/DataTable';
+import { StatusBadge } from '../components/StatusBadge';
+import { Chip } from '../components/Chip';
+import { Button, Card, ErrorText, Loading, PageHeader } from '../components/ui';
 
-import { getBatchDetail } from "../api/barcodesApi";
-import { getErrorMessage } from "../api/http";
-import type { GeneratedBatchDetail } from "../api/types";
-import { Badge } from "../components/Badge";
-import { Button } from "../components/Button";
-import { EmptyState } from "../components/EmptyState";
-import { Table } from "../components/Table";
-import { Header } from "../layout/Header";
-import { formatDate, nullable } from "../utils/format";
-
-export function BatchDetailPage() {
+export default function BatchDetailPage() {
+  const { t } = useTranslation();
+  const { batchId } = useParams();
+  const id = Number(batchId);
   const navigate = useNavigate();
-  const params = useParams();
-  const batchId = Number(params.batchId);
-  const [batch, setBatch] = useState<GeneratedBatchDetail | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const isStaff = user?.role === 'admin' || user?.role === 'operator';
+  const deptName = useDepartmentName();
 
-  async function loadBatch(): Promise<void> {
-    if (!Number.isInteger(batchId)) {
-      setError("Invalid batch id.");
-      return;
-    }
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ['batch', id],
+    queryFn: () => getBatchDetail(id),
+    enabled: Number.isFinite(id),
+  });
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      setBatch(await getBatchDetail(batchId));
-    } catch (requestError) {
-      setBatch(null);
-      setError(getErrorMessage(requestError));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void loadBatch();
-  }, [batchId]);
+  const columns: Column<GeneratedBarcodeItem>[] = [
+    { key: 'barcode', header: t('lifecycle.barcode'), render: (r) => <span className="font-mono">{r.barcode}</span> },
+    { key: 'seq', header: '№', render: (r) => r.sequence_number },
+    { key: 'status', header: t('lifecycle.status'), render: (r) => <StatusBadge status={r.status} /> },
+    {
+      key: 'printed',
+      header: t('lifecycle.printed'),
+      render: (r) => (r.printed ? <StatusBadge status="printed" /> : <Chip tone="muted">{t('common.no')}</Chip>),
+    },
+  ];
 
   return (
-    <section>
-      <Header
-        title={`Batch #${Number.isInteger(batchId) ? batchId : ""}`}
-        description="Сводка партии и все сгенерированные SHPI."
-        actions={
-          <div className="inline-actions">
-            <Button icon={<RefreshCw size={15} />} loading={loading} onClick={loadBatch}>
-              Refresh
-            </Button>
-            {batch ? (
-              <Button
-                icon={<FileText size={15} />}
-                variant="primary"
-                onClick={() => navigate(`/app/pdf/${batch.id}`)}
-              >
-                PDF / Print
-              </Button>
-            ) : null}
-          </div>
-        }
-      />
+    <div>
+      <Link to="/journal" className="mb-2 inline-flex items-center gap-1 text-[16px] text-t2 hover:text-t1">
+        <i className="ti ti-chevron-left" /> {t('journal.title')}
+      </Link>
 
-      {error ? <div className="alert alert-danger">{error}</div> : null}
-      {loading ? <div className="inline-loader">Loading batch...</div> : null}
+      {isLoading ? (
+        <Loading />
+      ) : isError ? (
+        <ErrorText error={error} />
+      ) : data ? (
+        <>
+          <PageHeader
+            title={t('batch.title', { id: data.id })}
+            subtitle={`${data.package_type} · ${data.quantity} ${t('batch.pcs')}`}
+            actions={
+              isStaff ? (
+                <Button size="sm" onClick={() => navigate(`/print?batch=${data.id}`)}>
+                  <i className="ti ti-printer" /> {t('gen.toPrint')}
+                </Button>
+              ) : undefined
+            }
+          />
 
-      {!loading && !batch ? (
-        <EmptyState title="Batch not found" description="Откройте существующий batch из History." />
-      ) : null}
-
-      {batch ? (
-        <div className="stack">
-          <div className="panel">
-            <div className="result-header">
-              <Badge variant="brand">{batch.package_type}</Badge>
-              <Badge variant="neutral">{batch.status}</Badge>
-              <Badge variant="success">{batch.quantity} items</Badge>
-            </div>
-            <dl className="summary-grid">
-              <div>
-                <dt>Department ID</dt>
-                <dd>{nullable(batch.department_id)}</dd>
-              </div>
-              <div>
-                <dt>Generated by</dt>
-                <dd>{nullable(batch.generated_by)}</dd>
-              </div>
-              <div>
-                <dt>Generated at</dt>
-                <dd>{formatDate(batch.generated_at)}</dd>
-              </div>
-              <div>
-                <dt>Source</dt>
-                <dd>{nullable(batch.source)}</dd>
-              </div>
-              <div>
-                <dt>First barcode</dt>
-                <dd className="mono">{batch.first_barcode}</dd>
-              </div>
-              <div>
-                <dt>Last barcode</dt>
-                <dd className="mono">{batch.last_barcode}</dd>
-              </div>
-              <div className="wide">
-                <dt>Notes</dt>
-                <dd>{nullable(batch.notes)}</dd>
-              </div>
-            </dl>
-          </div>
-
-          <div className="panel">
-            <h2>Barcodes</h2>
-            <Table>
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>SHPI</th>
-                  <th>Sequence</th>
-                  <th>Printed</th>
-                  <th>Printed at</th>
-                  <th>Generated at</th>
-                </tr>
-              </thead>
+          <Card className="mb-4 max-w-xl">
+            <table className="w-full text-[16px]">
               <tbody>
-                {batch.barcodes.map((barcode, index) => (
-                  <tr key={barcode.id}>
-                    <td>{index + 1}</td>
-                    <td className="mono">{barcode.barcode}</td>
-                    <td className="mono">{barcode.sequence_number}</td>
-                    <td>
-                      <Badge variant={barcode.printed ? "success" : "neutral"}>
-                        {barcode.printed ? "Printed" : "Not printed"}
-                      </Badge>
-                    </td>
-                    <td>{formatDate(barcode.printed_at)}</td>
-                    <td>{formatDate(barcode.generated_at)}</td>
+                <tr>
+                  <td className="py-1 text-t2">{t('detail.department')}</td>
+                  <td className="py-1 text-right">{deptName(data.department_id)}</td>
+                </tr>
+                <tr>
+                  <td className="py-1 text-t2">{t('gen.range')}</td>
+                  <td className="py-1 text-right font-mono">
+                    {data.first_barcode} → {data.last_barcode}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1 text-t2">{t('journal.source')}</td>
+                  <td className="py-1 text-right">{data.source ?? '—'}</td>
+                </tr>
+                {data.notes && (
+                  <tr>
+                    <td className="py-1 text-t2">{t('gen.notes')}</td>
+                    <td className="py-1 text-right">{data.notes}</td>
                   </tr>
-                ))}
+                )}
               </tbody>
-            </Table>
-          </div>
-        </div>
+            </table>
+          </Card>
+
+          <DataTable columns={columns} rows={data.barcodes} rowKey={(r) => r.id} empty="—" />
+        </>
       ) : null}
-    </section>
+    </div>
   );
 }

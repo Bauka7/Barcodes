@@ -1,101 +1,36 @@
-export type UserRole = "admin" | "operator" | "client";
+// Централизованные алиасы типов из сгенерированного openapi (не пишем руками).
+import type { components } from './generated';
 
-export interface TokenResponse {
-  access_token: string;
-  token_type: string;
-}
+type S = components['schemas'];
 
-export interface UserRead {
-  id: number;
-  username: string;
-  full_name: string | null;
-  role: UserRole;
-  department_id: number | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+export type GeneratedBatchItem = S['GeneratedBatchItem'];
+export type GeneratedBarcodeItem = S['GeneratedBarcodeItem'];
+export type GeneratedBatchDetail = S['GeneratedBatchDetail'];
+export type GeneratedBarcodeSearchResponse = S['GeneratedBarcodeSearchResponse'];
+export type BarcodeDetailResponse = S['BarcodeDetailResponse'];
+export type BarcodeNumberRequest = S['BarcodeNumberRequest'];
+export type BarcodeNumberResponse = S['BarcodeNumberResponse'];
+export type BarcodeLifecycleListResponse = S['BarcodeLifecycleListResponse'];
+export type PrintedBatchItem = S['PrintedBatchItem'];
+export type PrintBatchRequest = S['PrintBatchRequest'];
 
-export interface DepartmentTreeItem {
-  id: number;
-  code: string;
-  name: string;
-  department_type: string | null;
-  full_path: string | null;
-  children: DepartmentTreeItem[];
-}
+export type BarcodeRangeRead = S['BarcodeRangeRead'];
+export type RangeRemainingResponse = S['RangeRemainingResponse'];
+export type RangeGenerateRequest = S['RangeGenerateRequest'];
 
-export interface SelectedDepartment {
-  id: number;
-  code: string;
-  name: string;
-  full_path: string | null;
-}
+export type RangeRequestRead = S['RangeRequestRead'];
+export type RangeRequestCreate = S['RangeRequestCreate'];
+export type RangeRequestDecision = S['RangeRequestDecision'];
 
-export interface BarcodeNumberRequest {
-  package_type: string;
-  quantity: number;
-  department_id: number;
-  notes?: string | null;
-}
+export type ClientRead = S['ClientRead'];
+export type ClientCreate = S['ClientCreate'];
+export type ClientUpdate = S['ClientUpdate'];
 
-export interface BarcodeNumberResponse {
-  batch_id: number;
-  items: string[];
-  count: number;
-  first_barcode: string;
-  last_barcode: string;
-}
+export type UserRead = S['UserRead'];
+export type UserCreate = S['UserCreate'];
+export type UserUpdate = S['UserUpdate'];
 
-export interface GeneratedBatchItem {
-  id: number;
-  package_type: string;
-  quantity: number;
-  first_barcode: string;
-  last_barcode: string;
-  department_id: number | null;
-  generated_by: string | null;
-  source: string | null;
-  status: string;
-  generated_at: string;
-  notes: string | null;
-}
+export type AuditLogItem = S['AuditLogItem'];
 
-export interface GeneratedBarcodeItem {
-  id: number;
-  batch_id: number;
-  barcode: string;
-  package_type: string;
-  department_id: number | null;
-  sequence_number: number;
-  printed: boolean;
-  printed_at: string | null;
-  generated_at: string;
-}
-
-export interface GeneratedBatchDetail extends GeneratedBatchItem {
-  barcodes: GeneratedBarcodeItem[];
-}
-
-export interface GeneratedBarcodeSearchResponse extends GeneratedBarcodeItem {
-  batch: GeneratedBatchItem;
-}
-
-export interface PrintBatchRequest {
-  printer_name: string;
-  notes?: string | null;
-}
-
-export interface PrintedBatchItem {
-  id: number;
-  generated_batch_id: number;
-  department_id: number | null;
-  printed_count: number;
-  first_barcode: string;
-  last_barcode: string;
-  printed_by: string | null;
-  printer_name: string | null;
-  status: string;
-  printed_at: string;
-  notes: string | null;
-}
+export type DepartmentItem = S['DepartmentItem'];
+export type DepartmentTreeItem = S['DepartmentTreeItem'];

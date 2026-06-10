@@ -1,55 +1,68 @@
-import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { AppShell } from './components/AppShell';
+import { ProtectedRoute } from './auth/ProtectedRoute';
+import type { Role } from './types';
+import LoginPage from './pages/LoginPage';
+import GeneratePage from './pages/GeneratePage';
+import JournalPage from './pages/JournalPage';
+import BatchDetailPage from './pages/BatchDetailPage';
+import SearchPage from './pages/SearchPage';
+import BarcodeDetailPage from './pages/BarcodeDetailPage';
+import LifecyclePage from './pages/LifecyclePage';
+import PrintPage from './pages/PrintPage';
+import DepartmentsPage from './pages/DepartmentsPage';
+import RangesPage from './pages/RangesPage';
+import RangeRequestsPage from './pages/RangeRequestsPage';
+import ClientsPage from './pages/ClientsPage';
+import UsersPage from './pages/UsersPage';
+import AuditPage from './pages/AuditPage';
+import SettingsPage from './pages/SettingsPage';
 
-import { AuthProvider } from "./auth/AuthProvider";
-import { ProtectedRoute } from "./auth/ProtectedRoute";
-import { I18nProvider } from "./i18n";
-import { AppLayout } from "./layout/AppLayout";
-import { BatchDetailPage } from "./pages/BatchDetailPage";
-import { DepartmentsPage } from "./pages/DepartmentsPage";
-import { GenerateBarcodePage } from "./pages/GenerateBarcodePage";
-import { HistoryPage } from "./pages/HistoryPage";
-import { LoginPage } from "./pages/LoginPage";
-import { PdfPage } from "./pages/PdfPage";
-import { PrintHistoryPage } from "./pages/PrintHistoryPage";
-import { SearchPage } from "./pages/SearchPage";
+const STAFF: Role[] = ['admin', 'operator'];
+const ADMIN: Role[] = ['admin'];
 
-const router = createBrowserRouter([
-  {
-    path: "/login",
-    element: <LoginPage />,
-  },
-  {
-    element: <ProtectedRoute />,
-    children: [
-      {
-        path: "/app",
-        element: <AppLayout />,
-        children: [
-          { index: true, element: <Navigate to="/app/departments" replace /> },
-          { path: "departments", element: <DepartmentsPage /> },
-          { path: "generate", element: <GenerateBarcodePage /> },
-          { path: "history", element: <HistoryPage /> },
-          { path: "history/:batchId", element: <BatchDetailPage /> },
-          { path: "search", element: <SearchPage /> },
-          { path: "pdf", element: <PdfPage /> },
-          { path: "pdf/:batchId", element: <PdfPage /> },
-          { path: "print-history", element: <PrintHistoryPage /> },
-        ],
-      },
-    ],
-  },
-  {
-    path: "*",
-    element: <Navigate to="/app/departments" replace />,
-  },
-]);
+// Гейт по роли поверх общего гарда авторизации (раздел 6 брифа).
+function gated(roles: Role[], el: React.ReactNode) {
+  return <ProtectedRoute roles={roles}>{el}</ProtectedRoute>;
+}
 
 export default function App() {
   return (
-    <I18nProvider>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
-    </I18nProvider>
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+
+      {/* всё под каркасом — только для вошедших */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <AppShell />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<Navigate to="/generate" replace />} />
+
+        {/* все роли */}
+        <Route path="/generate" element={<GeneratePage />} />
+        <Route path="/barcodes/:barcode" element={<BarcodeDetailPage />} />
+        <Route path="/range-requests" element={<RangeRequestsPage />} />
+
+        {/* admin/operator */}
+        <Route path="/journal" element={gated(STAFF, <JournalPage />)} />
+        <Route path="/journal/:batchId" element={gated(STAFF, <BatchDetailPage />)} />
+        <Route path="/search" element={gated(STAFF, <SearchPage />)} />
+        <Route path="/lifecycle" element={gated(STAFF, <LifecyclePage />)} />
+        <Route path="/print" element={gated(STAFF, <PrintPage />)} />
+        <Route path="/departments" element={gated(STAFF, <DepartmentsPage />)} />
+        <Route path="/ranges" element={gated(STAFF, <RangesPage />)} />
+        <Route path="/clients" element={gated(STAFF, <ClientsPage />)} />
+
+        {/* admin */}
+        <Route path="/users" element={gated(ADMIN, <UsersPage />)} />
+        <Route path="/audit" element={gated(ADMIN, <AuditPage />)} />
+        <Route path="/settings" element={gated(ADMIN, <SettingsPage />)} />
+
+        <Route path="*" element={<Navigate to="/generate" replace />} />
+      </Route>
+    </Routes>
   );
 }

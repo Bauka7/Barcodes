@@ -1,0 +1,15 @@
+node_modules
+dist
+dist-ssr
+*.local
+.vite
+*.tsbuildinfo
+
+# env (см. .env.example)
+.env
+.env.*
+!.env.example
+
+# editor / os
+.DS_Store
+*.log

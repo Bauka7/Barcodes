@@ -1,88 +1,102 @@
-import { Barcode } from "lucide-react";
-import { FormEvent, useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useState, type FormEvent } from 'react';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '../auth/AuthContext';
+import { LangSwitch } from '../components/LangSwitch';
+import { ApiError } from '../api/client';
 
-import { getErrorMessage } from "../api/http";
-import { useAuth } from "../auth/AuthProvider";
-import { Button } from "../components/Button";
-import { Input } from "../components/Input";
-import { useI18n } from "../i18n";
-
-interface LocationState {
-  from?: {
-    pathname: string;
-  };
+interface FromState {
+  from?: { pathname?: string };
 }
 
-export function LoginPage() {
-  const { login, user } = useAuth();
-  const { t } = useI18n();
+export default function LoginPage() {
+  const { status, login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
 
-  if (user) {
-    return <Navigate to="/app/departments" replace />;
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // куда вернуться после входа: исходный маршрут или дашборд (Генерация — доступна всем)
+  const dest = (location.state as FromState | null)?.from?.pathname ?? '/generate';
+
+  // уже вошёл — на дашборд
+  if (status === 'authenticated') {
+    return <Navigate to={dest} replace />;
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
     setError(null);
-    setLoading(true);
-
+    setBusy(true);
     try {
-      await login(username.trim(), password);
-      const state = location.state as LocationState | null;
-      navigate(state?.from?.pathname ?? "/app/departments", { replace: true });
-    } catch (requestError) {
-      setError(getErrorMessage(requestError));
+      await login(username.trim(), password); // POST /auth/login (form-urlencoded) + GET /auth/me
+      navigate(dest, { replace: true });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) setError(t('login.invalid'));
+      else setError(err instanceof Error ? err.message : t('login.failed'));
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
+  const inputCls =
+    'w-full rounded-ctl border-[0.5px] border-bd2 bg-bg1 px-2.5 py-2 text-[16px] text-t1 outline-none focus:border-brand';
+
   return (
-    <main className="login-screen">
-      <form className="login-card" onSubmit={handleSubmit}>
-        <div className="login-brand">
-          <div className="login-mark">
-            <Barcode size={28} />
+    <div className="flex min-h-screen items-center justify-center bg-bg2 p-4">
+      <form
+        onSubmit={onSubmit}
+        className="w-full max-w-[360px] rounded-card border-[0.5px] border-bd3 bg-bg1 p-7"
+      >
+        <div className="mb-5 flex flex-col items-center gap-2.5">
+          <div className="flex h-11 w-11 items-center justify-center rounded-ctl bg-brand text-white">
+            <i className="ti ti-barcode text-[34px]" />
           </div>
-          <div>
-            <h1>{t("appName")}</h1>
-            <p>Генерация и печать штрихкодов</p>
+          <div className="text-center">
+            <div className="text-xl font-medium">{t('login.title')}</div>
+            <div className="text-[13px] text-t2">{t('login.subtitle')}</div>
           </div>
         </div>
 
-        <Input
-          autoComplete="username"
-          label={t("username")}
-          name="username"
-          placeholder="admin"
+        <label className="mb-1 block text-[15px] text-t2">{t('login.username')}</label>
+        <input
+          className={`${inputCls} mb-3`}
           value={username}
-          onChange={(event) => setUsername(event.target.value)}
-          required
+          onChange={(e) => setUsername(e.target.value)}
+          autoFocus
+          autoComplete="username"
         />
-        <Input
-          autoComplete="current-password"
-          label={t("password")}
-          name="password"
-          placeholder="••••••••"
+
+        <label className="mb-1 block text-[15px] text-t2">{t('login.password')}</label>
+        <input
           type="password"
+          className={inputCls}
           value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          required
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password"
+          placeholder="••••••••"
         />
 
-        {error ? <div className="alert alert-danger">{error}</div> : null}
+        {error && (
+          <div className="mt-2 rounded-ctl bg-dx px-2.5 py-1.5 text-[13px] text-dt">{error}</div>
+        )}
 
-        <Button className="full-width" loading={loading} type="submit" variant="primary">
-          {t("login")}
-        </Button>
+        <button
+          type="submit"
+          disabled={busy || !username || !password}
+          className="mt-4 flex w-full items-center justify-center rounded-ctl bg-brand px-3 py-2 text-[16px] font-medium text-white disabled:opacity-60"
+        >
+          {busy ? t('login.submitting') : t('login.submit')}
+        </button>
+
+        <div className="mt-4 flex justify-center">
+          <LangSwitch />
+        </div>
       </form>
-    </main>
+    </div>
   );
 }

@@ -1,0 +1,130 @@
+@import 'tailwindcss';
+
+/* Тёмная тема включается классом .dark на <html> (ThemeContext) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+  Дизайн-токены (раздел 4 брифа + :root из design-reference.html).
+  Семантические переменные меняются при .dark — поэтому маппинг в @theme
+  объявлен как inline: Tailwind подставит var(--…) в утилиты, а не значение.
+  Утилиты: bg-brand, text-t2, border-bd3, rounded-card/ctl, font-mono, bg-sx…
+*/
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-tint: var(--brand-tint);
+
+  --color-bg1: var(--bg1);
+  --color-bg2: var(--bg2);
+  --color-bg3: var(--bg3);
+
+  --color-bd2: var(--bd2);
+  --color-bd3: var(--bd3);
+
+  --color-t1: var(--t1);
+  --color-t2: var(--t2);
+  --color-t3: var(--t3);
+
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+
+  /* статус-чипы: x = фон, t = текст */
+  --color-sx: var(--sx);
+  --color-st: var(--st);
+  --color-dx: var(--dx);
+  --color-dt: var(--dt);
+  --color-wx: var(--wx);
+  --color-wt: var(--wt);
+
+  --radius-ctl: 8px;
+  --radius-card: 12px;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+:root {
+  color-scheme: light;
+  --brand: #1b4fa0;
+  --brand-dark: #143c7a;
+  --brand-tint: #e8eef8;
+
+  --bg1: #ffffff;
+  --bg2: #f6f5f1;
+  --bg3: #eceae3;
+
+  --bd3: #e6e4dd;
+  --bd2: #d4d2ca;
+
+  --t1: #1d1c1a;
+  --t2: #6e6c66;
+  --t3: #9b9890;
+
+  --success: #1d9e75;
+  --danger: #e24b4a;
+
+  --sx: #e3f4ec;
+  --st: #0f6e56;
+  --dx: #fbe6e6;
+  --dt: #b3322f;
+  --wx: #fbf0dd;
+  --wt: #8a5d12;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg1: #1c1c1e;
+  --bg2: #262628;
+  --bg3: #303033;
+
+  --bd3: #3a3a3d;
+  --bd2: #4a4a4d;
+
+  --t1: #ececec;
+  --t2: #a6a6a6;
+  --t3: #7a7a7a;
+
+  --sx: #15362b;
+  --st: #6fd3ae;
+  --dx: #3d1f1f;
+  --dt: #e7918f;
+  --wx: #3a2f17;
+  --wt: #e0b667;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg3);
+    color: var(--t1);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Штрихи для BarcodeView — всегда чёрное на белом, вне зависимости от темы. */
+.barcode-bars {
+  background: repeating-linear-gradient(
+    90deg,
+    #111 0,
+    #111 2px,
+    #fff 2px,
+    #fff 4px,
+    #111 4px,
+    #111 7px,
+    #fff 7px,
+    #fff 8px,
+    #111 8px,
+    #111 10px,
+    #fff 10px,
+    #fff 13px
+  );
+}
