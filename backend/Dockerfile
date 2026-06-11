@@ -5,13 +5,17 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Шрифт DejaVuSans для PDF-наклеек вшит в репозиторий
-# (backend/assets/fonts/DejaVuSans.ttf) и копируется ниже через COPY . .,
-# поэтому установка fonts-dejavu-core через apt не нужна — сборка не зависит
-# от доступности Debian-зеркал.
+# DejaVuSans font for PDF labels is bundled in the repo
+# (backend/assets/fonts/DejaVuSans.ttf) and copied below via COPY . .,
+# so installing fonts-dejavu-core via apt is not needed and the build
+# does not depend on Debian mirrors.
+
+# Make pip resilient to flaky/slow networks (more retries, long timeout).
+ENV PIP_DEFAULT_TIMEOUT=120
+ENV PIP_RETRIES=10
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --retries 10 --timeout 120 -r requirements.txt
 
 COPY . .
 

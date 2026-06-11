@@ -36,6 +36,7 @@ async def create_user_endpoint(
                 entity_id=str(user.id),
                 details={"username": user.username, "role": user.role},
             )
+            await session.refresh(user)
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -106,6 +107,8 @@ async def update_user_endpoint(
                 )
 
             await update_user(user=user, payload=payload)
+            await session.flush()
+            await session.refresh(user)
             await create_audit_log(
                 session=session,
                 action="user_updated",

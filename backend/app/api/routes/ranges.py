@@ -313,6 +313,7 @@ async def cancel_range_endpoint(
                 cancelled_by_user=current_user,
                 reason=payload.reason,
             )
+            await session.refresh(barcode_range)
             await create_audit_log(
                 session=session,
                 action="range_cancelled",
@@ -359,6 +360,7 @@ async def renew_range_endpoint(
                 new_expires_at=payload.expires_at,
                 renewed_by_user=current_user,
             )
+            await session.refresh(barcode_range)
             await create_audit_log(
                 session=session,
                 action="range_renewed",

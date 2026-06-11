@@ -75,6 +75,7 @@ async def create_client_endpoint(
                 entity_id=str(client.id),
                 details={"name": client.name},
             )
+            await session.refresh(client)
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -119,6 +120,8 @@ async def update_client_endpoint(
                 )
 
             await update_client(session=session, client=client, payload=payload)
+            await session.flush()
+            await session.refresh(client)
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -62,6 +62,9 @@ def _barcode_range_to_schema(barcode_range: BarcodeRange) -> BarcodeRangeRead:
         issued_by=barcode_range.issued_by,
         issued_at=barcode_range.issued_at,
         expires_at=barcode_range.expires_at,
+        cancellation_reason=barcode_range.cancellation_reason,
+        cancelled_by=barcode_range.cancelled_by,
+        cancelled_at=barcode_range.cancelled_at,
         notes=barcode_range.notes,
         created_at=barcode_range.created_at,
         updated_at=barcode_range.updated_at,
@@ -190,6 +193,8 @@ async def approve_range_request_endpoint(
                 expires_at=payload.expires_at,
                 notes=payload.notes,
             )
+            await session.refresh(range_request)
+            await session.refresh(barcode_range)
             await create_audit_log(
                 session=session,
                 action="range_request_approved",
@@ -256,6 +261,7 @@ async def reject_range_request_endpoint(
                 handled_by=current_user,
                 notes=payload.notes,
             )
+            await session.refresh(range_request)
             await create_audit_log(
                 session=session,
                 action="range_request_rejected",
@@ -309,6 +315,7 @@ async def cancel_range_request_endpoint(
                 handled_by=current_user,
                 notes=payload.notes,
             )
+            await session.refresh(range_request)
             await create_audit_log(
                 session=session,
                 action=(

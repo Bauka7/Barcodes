@@ -637,6 +637,9 @@ async def print_batch_pdf(
             detail="Not enough permissions.",
         )
 
+    if current_user.role == "client":
+        await session.rollback()
+
     try:
         pdf_bytes = await generate_batch_pdf_and_track_print(
             session=session,
