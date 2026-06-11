@@ -551,6 +551,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ranges/{range_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Range Endpoint */
+        post: operations["cancel_range_endpoint_api_ranges__range_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ranges/{range_id}/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Renew Range Endpoint */
+        post: operations["renew_range_endpoint_api_ranges__range_id__renew_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ranges/{range_id}/batches": {
         parameters: {
             query?: never;
@@ -836,6 +870,12 @@ export interface components {
             issued_at: string | null;
             /** Expires At */
             expires_at: string | null;
+            /** Cancellation Reason */
+            cancellation_reason: string | null;
+            /** Cancelled By */
+            cancelled_by: number | null;
+            /** Cancelled At */
+            cancelled_at: string | null;
             /** Notes */
             notes: string | null;
             /**
@@ -1156,6 +1196,11 @@ export interface components {
             /** Notes */
             notes: string | null;
         };
+        /** RangeCancelRequest */
+        RangeCancelRequest: {
+            /** Reason */
+            reason: string;
+        };
         /** RangeGenerateRequest */
         RangeGenerateRequest: {
             /** Quantity */
@@ -1175,6 +1220,14 @@ export interface components {
             end_number: number;
             /** Status */
             status: string;
+        };
+        /** RangeRenewRequest */
+        RangeRenewRequest: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
         };
         /** RangeRequestCreate */
         RangeRequestCreate: {
@@ -1206,6 +1259,8 @@ export interface components {
         RangeRequestDecision: {
             /** Approved Code */
             approved_code?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
             /** Notes */
             notes?: string | null;
         };
@@ -2457,6 +2512,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RangeRemainingResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_range_endpoint_api_ranges__range_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                range_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RangeCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BarcodeRangeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renew_range_endpoint_api_ranges__range_id__renew_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                range_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RangeRenewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BarcodeRangeRead"];
                 };
             };
             /** @description Validation Error */

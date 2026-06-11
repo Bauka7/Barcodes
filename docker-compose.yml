@@ -16,14 +16,18 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      # Сборка использует сеть хоста — обходит проблемы DNS/маршрутизации
+      # во внутренней сети Docker (pip тянет пакеты через хост).
+      network: host
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/barcode_db
       SECRET_KEY: docker-dev-secret
-      DEJAVU_SANS_FONT_PATH: /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+      DEJAVU_SANS_FONT_PATH: /app/assets/fonts/DejaVuSans.ttf
     ports:
       - "8000:8000"
     command:

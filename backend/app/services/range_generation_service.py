@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -93,6 +94,15 @@ async def generate_barcodes_from_range(
 
         if barcode_range is None:
             raise BarcodeRangeNotFoundError(f"Barcode range with id {range_id} was not found.")
+
+        # Защита: истёкший по сроку диапазон генерировать нельзя
+        # (статус будет помечен expired при ближайшем чтении списка).
+        if (
+            barcode_range.status == "active"
+            and barcode_range.expires_at is not None
+            and barcode_range.expires_at < datetime.now(timezone.utc)
+        ):
+            raise ValueError("Range has expired and can no longer generate SHPI.")
 
         if barcode_range.status != "active":
             raise ValueError("Only active barcode ranges can generate SHPI.")

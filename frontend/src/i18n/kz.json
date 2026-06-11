@@ -69,6 +69,8 @@
     "range": {
       "active": "белсенді",
       "exhausted": "таусылды",
+      "expired": "мерзімі бітті",
+      "cancelled": "бас тартылды",
       "closed": "жабық"
     },
     "request": {
@@ -170,9 +172,16 @@
     "used": "{{total}} ішінен {{used}} пайдаланылды",
     "current": "Ағымдағы №",
     "remaining": "Қалдық",
+    "expires": "Мерзімі",
     "generateFrom": "Диапазоннан жасау",
     "create": "Жасау",
-    "selectHint": "Сол жақтан диапазон таңдаңыз"
+    "selectHint": "Сол жақтан диапазон таңдаңыз",
+    "renew": "Ұзарту",
+    "renewTitle": "Диапазонды ұзарту",
+    "newExpiry": "Жаңа жарамдылық мерзімі",
+    "cancel": "Бас тарту",
+    "cancelTitle": "Диапазоннан бас тарту",
+    "cancelReason": "Бас тарту себебі"
   },
   "requests": {
     "title": "Диапазон өтінімдері",
@@ -189,6 +198,7 @@
     "requestedCodePh": "мыс. CV",
     "code": "Код",
     "codePh": "— кодты таңдаңыз —",
+    "expiresOptional": "Жарамдылық мерзімі (міндетті емес)",
     "approve": "Мақұлдау",
     "reject": "Қабылдамау",
     "cancel": "Қайтарып алу",

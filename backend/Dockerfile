@@ -5,9 +5,10 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends fonts-dejavu-core \
-    && rm -rf /var/lib/apt/lists/*
+# Шрифт DejaVuSans для PDF-наклеек вшит в репозиторий
+# (backend/assets/fonts/DejaVuSans.ttf) и копируется ниже через COPY . .,
+# поэтому установка fonts-dejavu-core через apt не нужна — сборка не зависит
+# от доступности Debian-зеркал.
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

@@ -169,6 +169,7 @@ async def approve_range_request(
     range_request: RangeRequest,
     handled_by: User,
     approved_code: str | None = None,
+    expires_at: datetime | None = None,
     notes: str | None = None,
 ) -> tuple[RangeRequest, BarcodeRange]:
     if range_request.status != "pending":
@@ -191,6 +192,7 @@ async def approve_range_request(
         session=session,
         range_request=range_request,
         issued_by_user=handled_by,
+        expires_at=expires_at,
     )
     range_request.status = "approved"
     range_request.handled_by = handled_by.id

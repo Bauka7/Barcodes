@@ -41,3 +41,11 @@ export const generateFromRange = (
   body: { quantity: number; notes?: string },
 ): Promise<BarcodeNumberResponse> =>
   apiFetch<BarcodeNumberResponse>(`/ranges/${id}/generate`, { method: 'POST', body });
+
+// Отмена диапазона модератором (с причиной).
+export const cancelRange = (id: number, reason: string): Promise<BarcodeRangeRead> =>
+  apiFetch<BarcodeRangeRead>(`/ranges/${id}/cancel`, { method: 'POST', body: { reason } });
+
+// Продление диапазона: новый срок (ISO-строка).
+export const renewRange = (id: number, expires_at: string): Promise<BarcodeRangeRead> =>
+  apiFetch<BarcodeRangeRead>(`/ranges/${id}/renew`, { method: 'POST', body: { expires_at } });

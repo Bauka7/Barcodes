@@ -94,17 +94,24 @@ export default function RangeRequestsPage() {
   >(null);
   const [approveFor, setApproveFor] = useState<RangeRequestRead | null>(null);
   const [approveCode, setApproveCode] = useState('');
+  const [approveExpires, setApproveExpires] = useState('');
   const [approveNotes, setApproveNotes] = useState('');
 
   const openApprove = (r: RangeRequestRead) => {
     setApproveFor(r);
     setApproveCode((r.requested_code ?? '').toUpperCase());
+    setApproveExpires('');
     setApproveNotes('');
   };
 
   const approve = useMutation({
-    mutationFn: ({ id, code, notes }: { id: number; code: string; notes: string }) =>
-      approveRangeRequest(id, code, notes || undefined),
+    mutationFn: ({ id, code, expires, notes }: { id: number; code: string; expires: string; notes: string }) =>
+      approveRangeRequest(
+        id,
+        code,
+        expires ? new Date(`${expires}T23:59:59`).toISOString() : undefined,
+        notes || undefined,
+      ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['range-requests'] });
       setApproveFor(null);
@@ -306,6 +313,13 @@ export default function RangeRequestsPage() {
                 ))}
               </Select>
             </Field>
+            <Field label={t('requests.expiresOptional')}>
+              <Input
+                type="date"
+                value={approveExpires}
+                onChange={(e) => setApproveExpires(e.target.value)}
+              />
+            </Field>
             <Field label={t('actions.notesOptional')}>
               <Textarea
                 rows={2}
@@ -323,6 +337,7 @@ export default function RangeRequestsPage() {
                   approve.mutate({
                     id: approveFor.id,
                     code: approveCode.trim().toUpperCase(),
+                    expires: approveExpires,
                     notes: approveNotes,
                   })
                 }

@@ -69,6 +69,8 @@
     "range": {
       "active": "активен",
       "exhausted": "исчерпан",
+      "expired": "истёк",
+      "cancelled": "отменён",
       "closed": "закрыт"
     },
     "request": {
@@ -170,9 +172,16 @@
     "used": "Использовано {{used}} из {{total}}",
     "current": "Текущий №",
     "remaining": "Остаток",
+    "expires": "Срок",
     "generateFrom": "Сгенерировать из диапазона",
     "create": "Создать",
-    "selectHint": "Выберите диапазон слева"
+    "selectHint": "Выберите диапазон слева",
+    "renew": "Продлить",
+    "renewTitle": "Продлить диапазон",
+    "newExpiry": "Новый срок действия",
+    "cancel": "Отменить",
+    "cancelTitle": "Отменить диапазон",
+    "cancelReason": "Причина отмены"
   },
   "requests": {
     "title": "Заявки на диапазон",
@@ -189,6 +198,7 @@
     "requestedCodePh": "напр. CV",
     "code": "Код",
     "codePh": "— выберите код —",
+    "expiresOptional": "Срок действия (необязательно)",
     "approve": "Одобрить",
     "reject": "Отклонить",
     "cancel": "Отозвать",

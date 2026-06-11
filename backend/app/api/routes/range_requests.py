@@ -187,6 +187,7 @@ async def approve_range_request_endpoint(
                 range_request=range_request,
                 handled_by=current_user,
                 approved_code=payload.approved_code,
+                expires_at=payload.expires_at,
                 notes=payload.notes,
             )
             await create_audit_log(
@@ -199,6 +200,9 @@ async def approve_range_request_endpoint(
                 details={
                     "range_id": barcode_range.id,
                     "approved_code": range_request.approved_code,
+                    "expires_at": (
+                        payload.expires_at.isoformat() if payload.expires_at else None
+                    ),
                 },
             )
             await create_audit_log(

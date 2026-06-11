@@ -6,7 +6,7 @@ type Domain = 'barcode' | 'range' | 'request';
 
 const TONES: Record<Domain, Record<string, ChipTone>> = {
   barcode: { generated: 'info', printed: 'ok', used: 'muted', cancelled: 'bad' },
-  range: { active: 'ok', exhausted: 'muted', closed: 'muted' },
+  range: { active: 'ok', exhausted: 'muted', expired: 'warn', cancelled: 'bad', closed: 'muted' },
   request: { pending: 'warn', approved: 'ok', rejected: 'bad', cancelled: 'muted' },
 };
 

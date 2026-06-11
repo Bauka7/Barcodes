@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import BarcodeCounter, BarcodeRange, RangeRequest, User
@@ -26,6 +26,7 @@ async def create_barcode_range_from_request(
     session: AsyncSession,
     range_request: RangeRequest,
     issued_by_user: User,
+    expires_at: datetime | None = None,
 ) -> BarcodeRange:
     package_type = validate_package_type(range_request.package_type)
 
@@ -57,6 +58,7 @@ async def create_barcode_range_from_request(
         request_id=range_request.id,
         issued_by=issued_by_user.id,
         issued_at=datetime.now(timezone.utc),
+        expires_at=expires_at,
         notes=range_request.notes,
     )
     session.add(barcode_range)
@@ -102,3 +104,73 @@ async def list_ranges(
     statement = statement.limit(validated_limit).offset(validated_offset)
     result = await session.execute(statement)
     return list(result.scalars().all())
+
+
+async def expire_due_ranges(session: AsyncSession) -> int:
+    """Ленивое истечение: active → expired для диапазонов с прошедшим сроком.
+
+    Вызывается перед выдачей списков/диапазонов. Возвращает число помеченных.
+    """
+
+    now = datetime.now(timezone.utc)
+    statement = (
+        update(BarcodeRange)
+        .where(BarcodeRange.status == "active")
+        .where(BarcodeRange.expires_at.is_not(None))
+        .where(BarcodeRange.expires_at < now)
+        .values(status="expired")
+    )
+    result = await session.execute(statement)
+    await session.commit()
+    return result.rowcount or 0
+
+
+async def cancel_range(
+    session: AsyncSession,
+    barcode_range: BarcodeRange,
+    cancelled_by_user: User,
+    reason: str,
+) -> BarcodeRange:
+    """Отмена диапазона модератором. Разрешена для active/expired."""
+
+    normalized_reason = (reason or "").strip()
+    if not normalized_reason:
+        raise ValueError("reason is required to cancel a range.")
+
+    if barcode_range.status not in {"active", "expired"}:
+        raise ValueError("Only active or expired ranges can be cancelled.")
+
+    barcode_range.status = "cancelled"
+    barcode_range.cancellation_reason = normalized_reason
+    barcode_range.cancelled_by = cancelled_by_user.id
+    barcode_range.cancelled_at = datetime.now(timezone.utc)
+    await session.flush()
+    return barcode_range
+
+
+async def renew_range(
+    session: AsyncSession,
+    barcode_range: BarcodeRange,
+    new_expires_at: datetime,
+    renewed_by_user: User,
+) -> BarcodeRange:
+    """Продление диапазона тому же клиенту: задаёт новый срок.
+
+    Для expired — реактивирует (expired → active). Отменённые не продлеваются.
+    """
+
+    if barcode_range.status not in {"active", "expired"}:
+        raise ValueError("Only active or expired ranges can be renewed.")
+
+    now = datetime.now(timezone.utc)
+    expires_at = new_expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
+        raise ValueError("new expiry date must be in the future.")
+
+    barcode_range.expires_at = expires_at
+    if barcode_range.status == "expired":
+        barcode_range.status = "active"
+    await session.flush()
+    return barcode_range

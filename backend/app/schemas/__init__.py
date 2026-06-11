@@ -23,7 +23,12 @@ from app.schemas.range_request import (
     RangeRequestDecision,
     RangeRequestRead,
 )
-from app.schemas.range_generation import RangeGenerateRequest, RangeRemainingResponse
+from app.schemas.range_generation import (
+    RangeCancelRequest,
+    RangeGenerateRequest,
+    RangeRemainingResponse,
+    RangeRenewRequest,
+)
 from app.schemas.auth import Token, TokenData
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 
@@ -53,8 +58,10 @@ __all__ = [
     "RangeRequestCreate",
     "RangeRequestDecision",
     "RangeRequestRead",
+    "RangeCancelRequest",
     "RangeGenerateRequest",
     "RangeRemainingResponse",
+    "RangeRenewRequest",
     "Token",
     "TokenData",
     "UserCreate",

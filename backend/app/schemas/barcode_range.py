@@ -16,6 +16,9 @@ class BarcodeRangeRead(BaseModel):
     issued_by: int | None
     issued_at: datetime | None
     expires_at: datetime | None
+    cancellation_reason: str | None
+    cancelled_by: int | None
+    cancelled_at: datetime | None
     notes: str | None
     created_at: datetime
     updated_at: datetime
