@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.routes.audit import router as audit_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.barcode_codes import router as barcode_codes_router
 from app.api.routes.barcodes import router as barcodes_router
 from app.api.routes.clients import router as clients_router
 from app.api.routes.departments import router as departments_router
@@ -13,6 +14,7 @@ from app.api.routes.users import router as users_router
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health_router)
 api_router.include_router(auth_router)
+api_router.include_router(barcode_codes_router)
 api_router.include_router(barcodes_router)
 api_router.include_router(clients_router)
 api_router.include_router(departments_router)

@@ -93,3 +93,16 @@ export interface PrintHistoryParams {
 export function listPrintHistory(p: PrintHistoryParams): Promise<PrintedBatchItem[]> {
   return apiFetch<PrintedBatchItem[]>(`/barcodes/print-history${qs({ ...p })}`);
 }
+
+// Клиентские «мои» эндпоинты (по организации текущего пользователя).
+export function listMyBatches(p: { limit?: number; offset?: number } = {}): Promise<GeneratedBatchItem[]> {
+  return apiFetch<GeneratedBatchItem[]>(`/barcodes/my-batches${qs({ ...p })}`);
+}
+
+export function getMyBatchDetail(batchId: number): Promise<GeneratedBatchDetail> {
+  return apiFetch<GeneratedBatchDetail>(`/barcodes/my-batches/${batchId}`);
+}
+
+export function listMyPrintHistory(p: { limit?: number; offset?: number } = {}): Promise<PrintedBatchItem[]> {
+  return apiFetch<PrintedBatchItem[]>(`/barcodes/my-print-history${qs({ ...p })}`);
+}

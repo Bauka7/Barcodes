@@ -14,6 +14,7 @@ export interface Me {
   full_name: string | null;
   role: Role;
   department_id: number | null;
+  client_id: number | null;
   is_active: boolean;
 }
 

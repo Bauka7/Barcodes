@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Department, GeneratedBarcode, GeneratedBatch
+from app.models import BarcodeRange, Department, GeneratedBarcode, GeneratedBatch
 
 
 async def create_generation_history(
@@ -89,6 +89,44 @@ async def list_batches(
     statement = statement.limit(validated_limit).offset(validated_offset)
     result = await session.execute(statement)
     return list(result.scalars().all())
+
+
+async def list_batches_for_client(
+    session: AsyncSession,
+    client_id: int,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[GeneratedBatch]:
+    """Партии, сгенерированные из диапазонов, выданных организации клиента."""
+
+    validated_limit, validated_offset = _validate_history_pagination(limit, offset)
+    statement = (
+        select(GeneratedBatch)
+        .join(BarcodeRange, GeneratedBatch.range_id == BarcodeRange.id)
+        .where(BarcodeRange.issued_to_client_id == client_id)
+        .order_by(GeneratedBatch.generated_at.desc())
+        .limit(validated_limit)
+        .offset(validated_offset)
+    )
+    result = await session.execute(statement)
+    return list(result.scalars().all())
+
+
+async def batch_belongs_to_client(
+    session: AsyncSession,
+    batch_id: int,
+    client_id: int,
+) -> bool:
+    """True, если партия сгенерирована из диапазона организации клиента."""
+
+    statement = (
+        select(GeneratedBatch.id)
+        .join(BarcodeRange, GeneratedBatch.range_id == BarcodeRange.id)
+        .where(GeneratedBatch.id == batch_id)
+        .where(BarcodeRange.issued_to_client_id == client_id)
+    )
+    result = await session.execute(statement)
+    return result.scalar_one_or_none() is not None
 
 
 async def get_batch_detail(

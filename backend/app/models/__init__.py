@@ -1,5 +1,6 @@
 from app.models.app_setting import AppSetting
 from app.models.audit_log import AuditLog
+from app.models.barcode_code_catalog import BarcodeCodeCatalog
 from app.models.barcode_range import BarcodeRange
 from app.models.barcode_counter import BarcodeCounter
 from app.models.client import Client
@@ -13,6 +14,7 @@ from app.models.user import User
 __all__ = [
     "AppSetting",
     "AuditLog",
+    "BarcodeCodeCatalog",
     "BarcodeRange",
     "BarcodeCounter",
     "Client",

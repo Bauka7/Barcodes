@@ -20,8 +20,16 @@ export const getRangeRequest = (id: number): Promise<RangeRequestRead> =>
 export const createRangeRequest = (body: RangeRequestCreate): Promise<RangeRequestRead> =>
   apiFetch<RangeRequestRead>('/range-requests', { method: 'POST', body });
 
-export const approveRangeRequest = (id: number, notes?: string): Promise<RangeRequestRead> =>
-  apiFetch<RangeRequestRead>(`/range-requests/${id}/approve`, { method: 'POST', body: { notes } });
+// Одобрение: модератор назначает код (approved_code) + комментарий.
+export const approveRangeRequest = (
+  id: number,
+  approved_code: string,
+  notes?: string,
+): Promise<RangeRequestRead> =>
+  apiFetch<RangeRequestRead>(`/range-requests/${id}/approve`, {
+    method: 'POST',
+    body: { approved_code, notes },
+  });
 
 export const rejectRangeRequest = (id: number, notes?: string): Promise<RangeRequestRead> =>
   apiFetch<RangeRequestRead>(`/range-requests/${id}/reject`, { method: 'POST', body: { notes } });

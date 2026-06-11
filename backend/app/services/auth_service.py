@@ -75,12 +75,17 @@ async def create_user(
     if existing_user is not None:
         raise ValueError(f"User '{username}' already exists.")
 
+    role = validate_role(payload.role)
+    if role == "client" and payload.client_id is None:
+        raise ValueError("client role requires client_id.")
+
     user = User(
         username=username,
         hashed_password=hash_password(payload.password),
         full_name=payload.full_name,
-        role=validate_role(payload.role),
+        role=role,
         department_id=payload.department_id,
+        client_id=payload.client_id,
         is_active=payload.is_active,
     )
     session.add(user)
@@ -103,8 +108,14 @@ async def update_user(
     if "department_id" in updated_fields:
         user.department_id = payload.department_id
 
+    if "client_id" in updated_fields:
+        user.client_id = payload.client_id
+
     if "is_active" in updated_fields and payload.is_active is not None:
         user.is_active = payload.is_active
+
+    if user.role == "client" and user.client_id is None:
+        raise ValueError("client role requires client_id.")
 
     return user
 

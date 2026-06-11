@@ -32,7 +32,7 @@ class RangeRequest(TimestampMixin, Base):
         index=True,
         nullable=True,
     )
-    package_type: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    package_type: Mapped[str | None] = mapped_column(String(20), index=True, nullable=True)
     requested_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     request_type: Mapped[str] = mapped_column(
         String(100),
@@ -40,6 +40,14 @@ class RangeRequest(TimestampMixin, Base):
         server_default="issue_range",
         nullable=False,
     )
+    # Бизнес-описание потребности клиента (тип товара / назначение).
+    purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Желаемый клиентом 2-буквенный код (необязательно; финальное слово за модератором).
+    requested_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Код, назначенный модератором при одобрении (источник диапазона/наклейки).
+    approved_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Комментарий модератора к решению (одобрение/отклонение).
+    decision_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     payload: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(
         String(50),

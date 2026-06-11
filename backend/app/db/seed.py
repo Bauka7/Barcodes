@@ -3,7 +3,7 @@ import asyncio
 from sqlalchemy import select
 
 from app.db.database import AsyncSessionLocal
-from app.models import AppSetting, BarcodeCounter
+from app.models import AppSetting, BarcodeCodeCatalog, BarcodeCounter
 
 DEFAULT_PACKAGE_TYPES = [
     "VC",
@@ -75,6 +75,31 @@ async def seed_barcode_counters() -> tuple[int, int]:
     return created_count, skipped_count
 
 
+async def seed_code_catalog() -> tuple[int, int]:
+    created_count = 0
+    skipped_count = 0
+
+    async with AsyncSessionLocal() as session:
+        for package_type in DEFAULT_PACKAGE_TYPES:
+            result = await session.execute(
+                select(BarcodeCodeCatalog).where(
+                    BarcodeCodeCatalog.code == package_type
+                )
+            )
+            existing_entry = result.scalar_one_or_none()
+
+            if existing_entry is not None:
+                skipped_count += 1
+                continue
+
+            session.add(BarcodeCodeCatalog(code=package_type, status="available"))
+            created_count += 1
+
+        await session.commit()
+
+    return created_count, skipped_count
+
+
 async def seed_app_settings() -> tuple[int, int]:
     created_count = 0
     skipped_count = 0
@@ -100,10 +125,13 @@ async def seed_app_settings() -> tuple[int, int]:
 
 async def seed_database() -> None:
     created_counters, skipped_counters = await seed_barcode_counters()
+    created_codes, skipped_codes = await seed_code_catalog()
     created_settings, skipped_settings = await seed_app_settings()
 
     print(f"Created counters: {created_counters}")
     print(f"Skipped counters: {skipped_counters}")
+    print(f"Created catalog codes: {created_codes}")
+    print(f"Skipped catalog codes: {skipped_codes}")
     print(f"Created settings: {created_settings}")
     print(f"Skipped settings: {skipped_settings}")
 

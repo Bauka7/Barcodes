@@ -18,6 +18,8 @@ export type BarcodeRangeRead = S['BarcodeRangeRead'];
 export type RangeRemainingResponse = S['RangeRemainingResponse'];
 export type RangeGenerateRequest = S['RangeGenerateRequest'];
 
+export type BarcodeCodeRead = S['BarcodeCodeRead'];
+
 export type RangeRequestRead = S['RangeRequestRead'];
 export type RangeRequestCreate = S['RangeRequestCreate'];
 export type RangeRequestDecision = S['RangeRequestDecision'];

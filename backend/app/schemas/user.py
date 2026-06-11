@@ -9,6 +9,7 @@ class UserCreate(BaseModel):
     full_name: str | None = None
     role: str
     department_id: int | None = None
+    client_id: int | None = None
     is_active: bool = True
 
 
@@ -16,6 +17,7 @@ class UserUpdate(BaseModel):
     full_name: str | None = None
     role: str | None = None
     department_id: int | None = None
+    client_id: int | None = None
     is_active: bool | None = None
 
 
@@ -25,6 +27,7 @@ class UserRead(BaseModel):
     full_name: str | None
     role: str
     department_id: int | None
+    client_id: int | None
     is_active: bool
     created_at: datetime
     updated_at: datetime

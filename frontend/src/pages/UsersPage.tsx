@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { createUser, listUsers, updateUser } from '../api/users';
+import { listClients } from '../api/clients';
 import type { UserRead } from '../api/types';
 import type { Role } from '../types';
 import { flattenDepartments, useDepartmentName, useDepartmentTree } from '../lib/departmentName';
@@ -24,6 +25,9 @@ export default function UsersPage() {
     queryFn: () => listUsers({ limit: 100 }),
   });
 
+  // Организации нужны, чтобы привязать пользователя с ролью client.
+  const clientsQ = useQuery({ queryKey: ['clients'], queryFn: () => listClients({ limit: 100 }) });
+
   const [editing, setEditing] = useState<UserRead | null>(null);
   const [open, setOpen] = useState(false);
   const [username, setUsername] = useState('');
@@ -31,6 +35,7 @@ export default function UsersPage() {
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<Role>('operator');
   const [departmentId, setDepartmentId] = useState('');
+  const [clientId, setClientId] = useState('');
   const [isActive, setIsActive] = useState(true);
 
   useEffect(() => {
@@ -40,17 +45,21 @@ export default function UsersPage() {
     setFullName(editing?.full_name ?? '');
     setRole((editing?.role as Role) ?? 'operator');
     setDepartmentId(editing?.department_id ? String(editing.department_id) : '');
+    setClientId(editing?.client_id ? String(editing.client_id) : '');
     setIsActive(editing?.is_active ?? true);
   }, [open, editing]);
 
   const save = useMutation({
     mutationFn: () => {
       const dep = departmentId ? Number(departmentId) : undefined;
+      // client_id обязателен для роли client (правило бэка); иначе не отправляем.
+      const cli = role === 'client' && clientId ? Number(clientId) : undefined;
       if (editing) {
         return updateUser(editing.id, {
           full_name: fullName.trim() || undefined,
           role,
           department_id: dep,
+          client_id: cli,
           is_active: isActive,
         });
       }
@@ -60,6 +69,7 @@ export default function UsersPage() {
         full_name: fullName.trim() || undefined,
         role,
         department_id: dep,
+        client_id: cli,
         is_active: isActive,
       });
     },
@@ -103,7 +113,10 @@ export default function UsersPage() {
     },
   ];
 
-  const validCreate = editing ? true : username.trim().length > 0 && password.length > 0;
+  // Роль client обязана иметь организацию (правило бэка).
+  const clientOk = role !== 'client' || clientId !== '';
+  const validCreate =
+    (editing ? true : username.trim().length > 0 && password.length > 0) && clientOk;
 
   return (
     <div>
@@ -164,6 +177,18 @@ export default function UsersPage() {
             ))}
           </Select>
         </Field>
+        {role === 'client' && (
+          <Field label={t('users.client')}>
+            <Select value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              <option value="">{t('users.clientPh')}</option>
+              {(clientsQ.data ?? []).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
         <Field>
           <label className="flex items-center justify-between text-[16px]">
             {t('users.active')}

@@ -14,6 +14,7 @@ from app.schemas.barcode import (
     GeneratedBatchDetail,
     GeneratedBatchItem,
 )
+from app.schemas.barcode_code import BarcodeCodeRead
 from app.schemas.client import ClientCreate, ClientRead, ClientUpdate
 from app.schemas.department import DepartmentItem, DepartmentTreeItem
 from app.schemas.print import PrintedBatchItem, PrintBatchRequest
@@ -33,6 +34,7 @@ __all__ = [
     "BarcodeDetailResponse",
     "BarcodeLifecycleListResponse",
     "BarcodeMarkUsedRequest",
+    "BarcodeCodeRead",
     "BarcodeRangeRead",
     "BarcodeNumberRequest",
     "BarcodeNumberResponse",

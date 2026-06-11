@@ -26,6 +26,11 @@ class User(TimestampMixin, Base):
         index=True,
         nullable=True,
     )
+    client_id: Mapped[int | None] = mapped_column(
+        ForeignKey("clients.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,

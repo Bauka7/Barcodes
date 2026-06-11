@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import BarcodeRange, RangeRequest, User
 from app.schemas import RangeRequestCreate
+from app.services.barcode_code_service import ensure_code_allocatable
 from app.services.barcode_number_service import MAX_COUNTER_VALUE, validate_package_type
 from app.services.barcode_range_service import create_barcode_range_from_request
 
@@ -57,19 +58,45 @@ async def create_range_request(
     payload: RangeRequestCreate,
     requester: User,
 ) -> RangeRequest:
-    package_type = validate_package_type(payload.package_type)
+    purpose = (payload.purpose or "").strip()
+    if not purpose:
+        raise ValueError("purpose is required.")
+
     requested_quantity = validate_requested_quantity(payload.requested_quantity)
+
+    if payload.department_id is None:
+        raise ValueError("department_id is required.")
 
     if not payload.request_type.strip():
         raise ValueError("request_type is required.")
 
+    # Код не обязателен на этапе заявки — его назначает модератор.
+    # package_type/requested_code валидируем только если переданы.
+    package_type = (
+        validate_package_type(payload.package_type) if payload.package_type else None
+    )
+    requested_code = (
+        validate_package_type(payload.requested_code) if payload.requested_code else None
+    )
+
+    # Владение жёстко привязываем к организации клиента; клиент не может
+    # подставить чужой client_id. Сотрудник указывает client_id явно.
+    if requester.role == "client":
+        if requester.client_id is None:
+            raise ValueError("client account is not linked to an organization.")
+        client_id = requester.client_id
+    else:
+        client_id = payload.client_id
+
     range_request = RangeRequest(
         requester_id=requester.id,
-        client_id=payload.client_id,
+        client_id=client_id,
         department_id=payload.department_id,
         package_type=package_type,
         requested_quantity=requested_quantity,
         request_type=payload.request_type.strip(),
+        purpose=purpose,
+        requested_code=requested_code,
         payload=_serialize_payload(payload.payload),
         status="pending",
         notes=payload.notes,
@@ -101,7 +128,10 @@ async def list_range_requests(
     statement = select(RangeRequest).order_by(RangeRequest.created_at.desc())
 
     if current_user.role == "client":
-        statement = statement.where(RangeRequest.requester_id == current_user.id)
+        # Клиент видит заявки всей своей организации, а не только свои.
+        if current_user.client_id is None:
+            return []
+        statement = statement.where(RangeRequest.client_id == current_user.client_id)
 
     if status:
         normalized_status = status.strip().lower()
@@ -127,17 +157,35 @@ def can_view_range_request(current_user: User, range_request: RangeRequest) -> b
     if current_user.role in {"admin", "operator"}:
         return True
 
-    return current_user.role == "client" and range_request.requester_id == current_user.id
+    return (
+        current_user.role == "client"
+        and current_user.client_id is not None
+        and range_request.client_id == current_user.client_id
+    )
 
 
 async def approve_range_request(
     session: AsyncSession,
     range_request: RangeRequest,
     handled_by: User,
+    approved_code: str | None = None,
     notes: str | None = None,
 ) -> tuple[RangeRequest, BarcodeRange]:
     if range_request.status != "pending":
         raise ValueError("Only pending range requests can be approved.")
+
+    # Код назначает модератор. Если не передан — используем код из заявки
+    # (legacy issue_range), иначе одобрить нельзя.
+    code = approved_code or range_request.package_type
+    if not code:
+        raise ValueError("approved_code is required to approve this request.")
+
+    # Проверяем код по справочнику и помечаем активным (available -> active).
+    code = await ensure_code_allocatable(session=session, code=code)
+
+    # Фиксируем выбранный код на заявке — из него режется диапазон вперёд.
+    range_request.package_type = code
+    range_request.approved_code = code
 
     barcode_range = await create_barcode_range_from_request(
         session=session,
@@ -150,6 +198,7 @@ async def approve_range_request(
 
     if notes is not None:
         range_request.notes = notes
+        range_request.decision_notes = notes
 
     await session.flush()
     return range_request, barcode_range
@@ -170,6 +219,7 @@ async def reject_range_request(
 
     if notes is not None:
         range_request.notes = notes
+        range_request.decision_notes = notes
 
     await session.flush()
     return range_request

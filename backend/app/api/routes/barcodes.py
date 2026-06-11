@@ -21,8 +21,10 @@ from app.schemas import (
     PrintBatchRequest,
 )
 from app.services.barcode_history_service import (
+    batch_belongs_to_client,
     get_batch_detail,
     list_batches,
+    list_batches_for_client,
     search_barcode,
 )
 from app.services.barcode_number_service import (
@@ -43,7 +45,10 @@ from app.services.pdf_label_service import (
     generate_batch_pdf_and_track_print,
     generate_batch_pdf_preview,
 )
-from app.services.print_tracking_service import list_print_history
+from app.services.print_tracking_service import (
+    list_print_history,
+    list_print_history_for_client,
+)
 
 router = APIRouter(prefix="/barcodes", tags=["barcodes"])
 
@@ -53,7 +58,7 @@ async def create_barcode_numbers(
     payload: BarcodeNumberRequest,
     request: Request,
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(require_roles("admin", "operator", "client")),
+    current_user: User = Depends(require_roles("admin", "operator")),
 ) -> BarcodeNumberResponse:
     try:
         result = await generate_barcode_numbers_with_history(
@@ -456,6 +461,101 @@ async def search_generated_barcode(
 
 
 @router.get(
+    "/my-batches",
+    response_model=list[GeneratedBatchItem],
+    status_code=status.HTTP_200_OK,
+)
+async def get_my_batches(
+    limit: int = Query(default=20),
+    offset: int = Query(default=0),
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator", "client")),
+) -> list[GeneratedBatchItem]:
+    if current_user.client_id is None:
+        return []
+
+    try:
+        batches = await list_batches_for_client(
+            session=session,
+            client_id=current_user.client_id,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+    return [_batch_to_schema(batch) for batch in batches]
+
+
+@router.get(
+    "/my-batches/{batch_id}",
+    response_model=GeneratedBatchDetail,
+    status_code=status.HTTP_200_OK,
+)
+async def get_my_batch_detail(
+    batch_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator", "client")),
+) -> GeneratedBatchDetail:
+    if current_user.client_id is None or not await batch_belongs_to_client(
+        session=session,
+        batch_id=batch_id,
+        client_id=current_user.client_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Generated batch with id {batch_id} was not found.",
+        )
+
+    result = await get_batch_detail(session=session, batch_id=batch_id)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Generated batch with id {batch_id} was not found.",
+        )
+
+    batch, barcodes = result
+    batch_item = _batch_to_schema(batch)
+    return GeneratedBatchDetail(
+        **batch_item.model_dump(),
+        barcodes=[_barcode_to_schema(barcode) for barcode in barcodes],
+    )
+
+
+@router.get(
+    "/my-print-history",
+    response_model=list[PrintedBatchItem],
+    status_code=status.HTTP_200_OK,
+)
+async def get_my_print_history(
+    limit: int = Query(default=20),
+    offset: int = Query(default=0),
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin", "operator", "client")),
+) -> list[PrintedBatchItem]:
+    if current_user.client_id is None:
+        return []
+
+    try:
+        printed_batches = await list_print_history_for_client(
+            session=session,
+            client_id=current_user.client_id,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+    return [_printed_batch_to_schema(printed_batch) for printed_batch in printed_batches]
+
+
+@router.get(
     "/batches/{batch_id}/pdf-preview",
     response_class=Response,
     status_code=status.HTTP_200_OK,
@@ -466,6 +566,20 @@ async def preview_batch_pdf(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> Response:
+    # Клиент может смотреть PDF только своих партий (партий своей организации).
+    if current_user.role == "client" and (
+        current_user.client_id is None
+        or not await batch_belongs_to_client(
+            session=session,
+            batch_id=batch_id,
+            client_id=current_user.client_id,
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions.",
+        )
+
     try:
         pdf_bytes = await generate_batch_pdf_preview(
             session=session,
@@ -507,8 +621,22 @@ async def print_batch_pdf(
     payload: PrintBatchRequest,
     request: Request,
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(require_roles("admin", "operator")),
+    current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> Response:
+    # Клиент может печатать только свои партии (партий своей организации).
+    if current_user.role == "client" and (
+        current_user.client_id is None
+        or not await batch_belongs_to_client(
+            session=session,
+            batch_id=batch_id,
+            client_id=current_user.client_id,
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions.",
+        )
+
     try:
         pdf_bytes = await generate_batch_pdf_and_track_print(
             session=session,
@@ -530,7 +658,7 @@ async def print_batch_pdf(
 
     await log_user_action(
         session=session,
-        action="batch_printed",
+        action="client_pdf_downloaded" if current_user.role == "client" else "batch_printed",
         user=current_user,
         request=request,
         entity_type="generated_batch",

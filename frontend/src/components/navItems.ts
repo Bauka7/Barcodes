@@ -9,18 +9,21 @@ export interface NavItem {
   roles: Role[];
 }
 
-// Навигация по ролям — раздел 6 брифа («выверено по бэку»).
+// Навигация по ролям («идеальный проект»).
 // admin: всё. operator: всё кроме Пользователи/Аудит/Настройки (Клиенты — просмотр).
-// client: только Генерация и свои Заявки (остальное скрыто, на бэке 403).
+// client: «Мои заявки» (потребности) + «Мои диапазоны» (выданные коды → генерация/печать).
+//   Прямая генерация и журнал клиенту недоступны (на бэке 403).
 export const NAV_ITEMS: NavItem[] = [
-  { key: 'generate', path: '/generate', icon: 'plus', roles: ['admin', 'operator', 'client'] },
+  { key: 'generate', path: '/generate', icon: 'plus', roles: ['admin', 'operator'] },
+  { key: 'myranges', path: '/my-ranges', icon: 'ticket', roles: ['client'] },
+  { key: 'requests', path: '/range-requests', icon: 'inbox', roles: ['admin', 'operator', 'client'] },
   { key: 'journal', path: '/journal', icon: 'history', roles: ['admin', 'operator'] },
   { key: 'search', path: '/search', icon: 'search', roles: ['admin', 'operator'] },
   { key: 'lifecycle', path: '/lifecycle', icon: 'refresh', roles: ['admin', 'operator'] },
   { key: 'print', path: '/print', icon: 'printer', roles: ['admin', 'operator'] },
   { key: 'departments', path: '/departments', icon: 'sitemap', roles: ['admin', 'operator'] },
   { key: 'ranges', path: '/ranges', icon: 'ruler-2', roles: ['admin', 'operator'] },
-  { key: 'requests', path: '/range-requests', icon: 'inbox', roles: ['admin', 'operator', 'client'] },
+  { key: 'codes', path: '/codes', icon: 'barcode', roles: ['admin', 'operator'] },
   { key: 'clients', path: '/clients', icon: 'building-store', roles: ['admin', 'operator'] },
   { key: 'users', path: '/users', icon: 'users', roles: ['admin'] },
   { key: 'audit', path: '/audit', icon: 'clipboard-list', roles: ['admin'] },

@@ -55,6 +55,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/barcode-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Barcode Codes */
+        get: operations["list_barcode_codes_api_barcode_codes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/barcode-codes/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Barcode Code */
+        get: operations["get_barcode_code_api_barcode_codes__code__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/barcodes/numbers": {
         parameters: {
             query?: never;
@@ -183,6 +217,57 @@ export interface paths {
         };
         /** Search Generated Barcode */
         get: operations["search_generated_barcode_api_barcodes_history_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/barcodes/my-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get My Batches */
+        get: operations["get_my_batches_api_barcodes_my_batches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/barcodes/my-batches/{batch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get My Batch Detail */
+        get: operations["get_my_batch_detail_api_barcodes_my_batches__batch_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/barcodes/my-print-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get My Print History */
+        get: operations["get_my_print_history_api_barcodes_my_print_history_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -398,6 +483,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ranges/my": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get My Ranges */
+        get: operations["get_my_ranges_api_ranges_my_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ranges": {
         parameters: {
             query?: never;
@@ -570,6 +672,33 @@ export interface components {
         BarcodeCancelRequest: {
             /** Reason */
             reason: string;
+        };
+        /** BarcodeCodeRead */
+        BarcodeCodeRead: {
+            /** Id */
+            id: number;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string | null;
+            /** Category */
+            category: string | null;
+            /** Status */
+            status: string;
+            /** Owner */
+            owner: string | null;
+            /** Notes */
+            notes: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** BarcodeDepartmentInfo */
         BarcodeDepartmentInfo: {
@@ -1049,14 +1178,18 @@ export interface components {
         };
         /** RangeRequestCreate */
         RangeRequestCreate: {
-            /** Client Id */
-            client_id?: number | null;
-            /** Department Id */
-            department_id?: number | null;
-            /** Package Type */
-            package_type: string;
+            /** Purpose */
+            purpose: string;
             /** Requested Quantity */
             requested_quantity: number;
+            /** Department Id */
+            department_id: number;
+            /** Requested Code */
+            requested_code?: string | null;
+            /** Package Type */
+            package_type?: string | null;
+            /** Client Id */
+            client_id?: number | null;
             /**
              * Request Type
              * @default issue_range
@@ -1071,6 +1204,8 @@ export interface components {
         };
         /** RangeRequestDecision */
         RangeRequestDecision: {
+            /** Approved Code */
+            approved_code?: string | null;
             /** Notes */
             notes?: string | null;
         };
@@ -1085,11 +1220,19 @@ export interface components {
             /** Department Id */
             department_id: number | null;
             /** Package Type */
-            package_type: string;
+            package_type: string | null;
             /** Requested Quantity */
             requested_quantity: number;
             /** Request Type */
             request_type: string;
+            /** Purpose */
+            purpose: string | null;
+            /** Requested Code */
+            requested_code: string | null;
+            /** Approved Code */
+            approved_code: string | null;
+            /** Decision Notes */
+            decision_notes: string | null;
             /** Payload */
             payload: {
                 [key: string]: unknown;
@@ -1135,6 +1278,8 @@ export interface components {
             role: string;
             /** Department Id */
             department_id?: number | null;
+            /** Client Id */
+            client_id?: number | null;
             /**
              * Is Active
              * @default true
@@ -1153,6 +1298,8 @@ export interface components {
             role: string;
             /** Department Id */
             department_id: number | null;
+            /** Client Id */
+            client_id: number | null;
             /** Is Active */
             is_active: boolean;
             /**
@@ -1174,6 +1321,8 @@ export interface components {
             role?: string | null;
             /** Department Id */
             department_id?: number | null;
+            /** Client Id */
+            client_id?: number | null;
             /** Is Active */
             is_active?: boolean | null;
         };
@@ -1270,6 +1419,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserRead"];
+                };
+            };
+        };
+    };
+    list_barcode_codes_api_barcode_codes_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BarcodeCodeRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_barcode_code_api_barcode_codes__code__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BarcodeCodeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1527,6 +1740,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GeneratedBarcodeSearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_batches_api_barcodes_my_batches_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedBatchItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_batch_detail_api_barcodes_my_batches__batch_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeneratedBatchDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_print_history_api_barcodes_my_print_history_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrintedBatchItem"][];
                 };
             };
             /** @description Validation Error */
@@ -2014,6 +2322,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RangeRequestRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_ranges_api_ranges_my_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BarcodeRangeRead"][];
                 };
             };
             /** @description Validation Error */

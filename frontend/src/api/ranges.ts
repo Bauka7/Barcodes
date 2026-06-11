@@ -18,6 +18,12 @@ export interface RangesParams {
 export const listRanges = (p: RangesParams = {}): Promise<BarcodeRangeRead[]> =>
   apiFetch<BarcodeRangeRead[]>(`/ranges${qs({ ...p })}`);
 
+// GET /ranges/my — диапазоны, выданные организации текущего клиента.
+export const listMyRanges = (
+  p: { limit?: number; offset?: number; status?: string } = {},
+): Promise<BarcodeRangeRead[]> =>
+  apiFetch<BarcodeRangeRead[]>(`/ranges/my${qs({ ...p })}`);
+
 export const getRange = (id: number): Promise<BarcodeRangeRead> =>
   apiFetch<BarcodeRangeRead>(`/ranges/${id}`);
 

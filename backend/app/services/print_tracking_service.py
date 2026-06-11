@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import GeneratedBarcode, GeneratedBatch, PrintedBatch
+from app.models import BarcodeRange, GeneratedBarcode, GeneratedBatch, PrintedBatch
 
 
 async def create_printed_batch(
@@ -69,5 +69,27 @@ async def list_print_history(
         statement = statement.where(PrintedBatch.generated_batch_id == generated_batch_id)
 
     statement = statement.limit(validated_limit).offset(validated_offset)
+    result = await session.execute(statement)
+    return list(result.scalars().all())
+
+
+async def list_print_history_for_client(
+    session: AsyncSession,
+    client_id: int,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[PrintedBatch]:
+    """История печати по партиям организации клиента."""
+
+    validated_limit, validated_offset = _validate_print_history_pagination(limit, offset)
+    statement = (
+        select(PrintedBatch)
+        .join(GeneratedBatch, PrintedBatch.generated_batch_id == GeneratedBatch.id)
+        .join(BarcodeRange, GeneratedBatch.range_id == BarcodeRange.id)
+        .where(BarcodeRange.issued_to_client_id == client_id)
+        .order_by(PrintedBatch.printed_at.desc())
+        .limit(validated_limit)
+        .offset(validated_offset)
+    )
     result = await session.execute(statement)
     return list(result.scalars().all())

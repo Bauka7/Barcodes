@@ -34,6 +34,10 @@ def _range_request_to_schema(range_request: RangeRequest) -> RangeRequestRead:
         package_type=range_request.package_type,
         requested_quantity=range_request.requested_quantity,
         request_type=range_request.request_type,
+        purpose=range_request.purpose,
+        requested_code=range_request.requested_code,
+        approved_code=range_request.approved_code,
+        decision_notes=range_request.decision_notes,
         payload=deserialize_payload(range_request.payload),
         status=range_request.status,
         handled_by=range_request.handled_by,
@@ -86,8 +90,9 @@ async def create_range_request_endpoint(
                 entity_type="range_request",
                 entity_id=str(range_request.id),
                 details={
-                    "package_type": range_request.package_type,
+                    "purpose": range_request.purpose,
                     "requested_quantity": range_request.requested_quantity,
+                    "requested_code": range_request.requested_code,
                     "client_id": range_request.client_id,
                     "department_id": range_request.department_id,
                 },
@@ -181,6 +186,7 @@ async def approve_range_request_endpoint(
                 session=session,
                 range_request=range_request,
                 handled_by=current_user,
+                approved_code=payload.approved_code,
                 notes=payload.notes,
             )
             await create_audit_log(
@@ -190,7 +196,10 @@ async def approve_range_request_endpoint(
                 request=request,
                 entity_type="range_request",
                 entity_id=str(range_request.id),
-                details={"range_id": barcode_range.id},
+                details={
+                    "range_id": barcode_range.id,
+                    "approved_code": range_request.approved_code,
+                },
             )
             await create_audit_log(
                 session=session,
@@ -271,7 +280,7 @@ async def cancel_range_request_endpoint(
     payload: RangeRequestDecision,
     request: Request,
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(require_roles("admin", "operator")),
+    current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> RangeRequestRead:
     try:
         async with session.begin():
@@ -283,6 +292,13 @@ async def cancel_range_request_endpoint(
                     detail=f"Range request with id {request_id} was not found.",
                 )
 
+            # Клиент может отменить только заявку своей организации.
+            if not can_view_range_request(current_user=current_user, range_request=range_request):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not enough permissions.",
+                )
+
             range_request = await cancel_range_request(
                 session=session,
                 range_request=range_request,
@@ -291,7 +307,11 @@ async def cancel_range_request_endpoint(
             )
             await create_audit_log(
                 session=session,
-                action="range_request_cancelled",
+                action=(
+                    "range_request_cancelled_by_client"
+                    if current_user.role == "client"
+                    else "range_request_cancelled"
+                ),
                 user=current_user,
                 request=request,
                 entity_type="range_request",
