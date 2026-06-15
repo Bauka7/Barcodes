@@ -59,7 +59,7 @@ function TreeNode({ node, depth, selectedId, onSelect, forceOpen }: NodeProps) {
         }`}
         style={{ paddingLeft: 8 + depth * 16 }}
       >
-        <div className="flex items-center gap-1.5 py-1.5 pr-2">
+        <div className="flex min-w-0 items-center gap-1.5 py-1.5 pr-2">
           {hasChildren ? (
             <button
               type="button"
@@ -80,9 +80,9 @@ function TreeNode({ node, depth, selectedId, onSelect, forceOpen }: NodeProps) {
               selected ? 'text-brand-dark' : 'text-brand'
             }`}
           />
-          <span className={selected ? 'text-brand-dark' : ''}>{node.name}</span>
+          <span className={`truncate ${selected ? 'text-brand-dark' : ''}`}>{node.name}</span>
         </div>
-        <span className="pr-2 font-mono text-[13px] text-t3">{node.code}</span>
+        <span className="shrink-0 pr-2 font-mono text-[12px] text-t3">{node.code}</span>
       </div>
 
       {hasChildren && isOpen && (

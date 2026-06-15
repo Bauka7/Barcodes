@@ -14,16 +14,11 @@ export interface NavItem {
 // client: «Мои заявки» (потребности) + «Мои диапазоны» (выданные коды → генерация/печать).
 //   Прямая генерация и журнал клиенту недоступны (на бэке 403).
 export const NAV_ITEMS: NavItem[] = [
-  { key: 'generate', path: '/generate', icon: 'plus', roles: ['admin', 'operator'] },
   { key: 'myranges', path: '/my-ranges', icon: 'ticket', roles: ['client'] },
-  { key: 'requests', path: '/range-requests', icon: 'inbox', roles: ['admin', 'operator', 'client'] },
+  { key: 'profile', path: '/profile', icon: 'user-circle', roles: ['client'] },
   { key: 'journal', path: '/journal', icon: 'history', roles: ['admin', 'operator'] },
   { key: 'search', path: '/search', icon: 'search', roles: ['admin', 'operator'] },
-  { key: 'lifecycle', path: '/lifecycle', icon: 'refresh', roles: ['admin', 'operator'] },
-  { key: 'print', path: '/print', icon: 'printer', roles: ['admin', 'operator'] },
   { key: 'departments', path: '/departments', icon: 'sitemap', roles: ['admin', 'operator'] },
-  { key: 'ranges', path: '/ranges', icon: 'ruler-2', roles: ['admin', 'operator'] },
-  { key: 'codes', path: '/codes', icon: 'barcode', roles: ['admin', 'operator'] },
   { key: 'users', path: '/users', icon: 'users', roles: ['admin'] },
   { key: 'audit', path: '/audit', icon: 'clipboard-list', roles: ['admin'] },
   { key: 'settings', path: '/settings', icon: 'settings', roles: ['admin'] },

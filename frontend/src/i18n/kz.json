@@ -13,7 +13,8 @@
     "clients": "Клиенттер",
     "users": "Пайдаланушылар",
     "audit": "Аудит",
-    "settings": "Баптаулар"
+    "settings": "Баптаулар",
+    "profile": "Профиль"
   },
   "shell": {
     "brand": "Barcodes",
@@ -224,6 +225,35 @@
     "emptyRanges": "Сізге әлі диапазон берілмеген. Өтінім жасаңыз.",
     "emptyBatches": "Партиялар әлі жоқ"
   },
+  "profile": {
+    "title": "Профиль",
+    "subtitle": "Аккаунт деректері, бөлімше және backend беретін мәліметтер",
+    "account": "Аккаунт",
+    "department": "Бөлімше",
+    "contacts": "Байланыс",
+    "moderator": "Модератор",
+    "username": "Username",
+    "fullName": "Full name",
+    "role": "Role",
+    "status": "Статус",
+    "active": "белсенді",
+    "inactive": "өшірілген",
+    "userId": "User ID",
+    "departmentName": "Атауы",
+    "departmentCode": "Код",
+    "departmentRegion": "Өңір",
+    "departmentType": "Түрі",
+    "departmentPath": "Толық жол",
+    "departmentId": "Department ID",
+    "clientId": "Client ID",
+    "email": "Email",
+    "phone": "Phone",
+    "contactsBackendNote": "/api/auth/me ішінде пайдаланушының email/phone өрістері қазір жоқ. clients ұйымында email/contact_phone/contact_person бар, бірақ client рөліне /api/clients/{id} қолжетімсіз.",
+    "moderatorName": "Аты-жөні",
+    "moderatorRole": "Рөлі",
+    "moderatorContact": "Байланыс",
+    "moderatorBackendNote": "Backend қазір client-пайдаланушыға модератор деректерін бермейді. Ол үшін бөлек endpoint немесе operator/admin-ға байланыс өрісі керек."
+  },
   "codes": {
     "title": "Кодтар анықтамалығы",
     "subtitle": "ШПИ екі әріптік кодтары (бағыттары)",
@@ -253,6 +283,9 @@
     "login": "Логин",
     "role": "Рөл",
     "department": "Бөлімше",
+    "departmentChoose": "Бөлімшені таңдаңыз",
+    "departmentSearch": "Атауы немесе коды бойынша іздеу",
+    "departmentClear": "Бөлімшені тазарту",
     "client": "Ұйым",
     "clientPh": "— ұйымды таңдаңыз —",
     "active": "Белсенді",
@@ -260,7 +293,14 @@
     "activeStatus": "белсенді",
     "inactiveStatus": "өшірілген",
     "new": "Жаңа пайдаланушы",
-    "edit": "Пайдаланушыны өзгерту"
+    "edit": "Пайдаланушыны өзгерту",
+    "disable": "Өшіру",
+    "restore": "Қалпына келтіру",
+    "disableTitle": "Пайдаланушыны өшіру",
+    "restoreTitle": "Пайдаланушыны қалпына келтіру",
+    "disableMessage": "{{name}} ({{username}}) пайдаланушысы жүйеге кіре алмайды. Тарихы мен деректері сақталады.",
+    "restoreMessage": "{{name}} ({{username}}) пайдаланушысының қолжетімділігін қалпына келтіру керек пе?",
+    "cannotDisableSelf": "Өз есептік жазбаңызды өшіруге болмайды"
   },
   "audit": {
     "title": "Аудит журналы",

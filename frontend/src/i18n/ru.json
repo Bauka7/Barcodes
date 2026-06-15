@@ -13,7 +13,8 @@
     "clients": "Клиенты",
     "users": "Пользователи",
     "audit": "Аудит",
-    "settings": "Настройки"
+    "settings": "Настройки",
+    "profile": "Профиль"
   },
   "shell": {
     "brand": "Barcodes",
@@ -224,6 +225,35 @@
     "emptyRanges": "Вам ещё не выдали диапазоны. Создайте заявку.",
     "emptyBatches": "Партий ещё нет"
   },
+  "profile": {
+    "title": "Профиль",
+    "subtitle": "Данные аккаунта, отделение и доступные сведения из backend",
+    "account": "Аккаунт",
+    "department": "Отделение",
+    "contacts": "Контакты",
+    "moderator": "Модератор",
+    "username": "Username",
+    "fullName": "Full name",
+    "role": "Role",
+    "status": "Статус",
+    "active": "активен",
+    "inactive": "отключён",
+    "userId": "User ID",
+    "departmentName": "Название",
+    "departmentCode": "Код",
+    "departmentRegion": "Регион",
+    "departmentType": "Тип",
+    "departmentPath": "Полный путь",
+    "departmentId": "Department ID",
+    "clientId": "Client ID",
+    "email": "Email",
+    "phone": "Phone",
+    "contactsBackendNote": "У пользователя в /api/auth/me сейчас нет email/phone. У организации clients есть email/contact_phone/contact_person, но клиентская роль не имеет доступа к /api/clients/{id}.",
+    "moderatorName": "ФИО",
+    "moderatorRole": "Роль",
+    "moderatorContact": "Контакт",
+    "moderatorBackendNote": "Backend сейчас не отдаёт данные модератора для client-пользователя. Для этого нужен отдельный endpoint или поле связи с operator/admin."
+  },
   "codes": {
     "title": "Справочник кодов",
     "subtitle": "Двухбуквенные коды (направления) ШПИ",
@@ -253,6 +283,9 @@
     "login": "Логин",
     "role": "Роль",
     "department": "Подразделение",
+    "departmentChoose": "Выберите подразделение",
+    "departmentSearch": "Поиск по названию или коду",
+    "departmentClear": "Очистить подразделение",
     "client": "Организация",
     "clientPh": "— выберите организацию —",
     "active": "Активен",
@@ -260,7 +293,14 @@
     "activeStatus": "активен",
     "inactiveStatus": "отключён",
     "new": "Новый пользователь",
-    "edit": "Изменить пользователя"
+    "edit": "Изменить пользователя",
+    "disable": "Отключить",
+    "restore": "Восстановить",
+    "disableTitle": "Отключить пользователя",
+    "restoreTitle": "Восстановить пользователя",
+    "disableMessage": "Пользователь {{name}} ({{username}}) больше не сможет войти в систему. История и данные сохранятся.",
+    "restoreMessage": "Восстановить доступ пользователю {{name}} ({{username}})?",
+    "cannotDisableSelf": "Нельзя отключить собственную учётную запись"
   },
   "audit": {
     "title": "Журнал аудита",

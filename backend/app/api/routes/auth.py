@@ -21,7 +21,7 @@ def user_to_schema(user: User) -> UserRead:
         department_id=user.department_id,
         client_id=user.client_id,
         is_active=user.is_active,
-        created_at=user.created_at,
+        created_at=user.created_at,    
         updated_at=user.updated_at,
     )
 
