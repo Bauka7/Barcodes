@@ -25,6 +25,7 @@ Implemented:
 - Audit logging for important user actions.
 - Legacy clients API, range requests, barcode range allocation, and SHPI generation from allocated ranges.
 - Individual barcode lifecycle tracking.
+- Admin-only SHPI Map for monitoring counters by code and region.
 - Frontend MVP for login, departments, generation, history, search, PDF preview/download, and print history.
 
 Not implemented yet:
@@ -144,7 +145,7 @@ Import legacy departments from DBF:
 python -m app.db.import_departments
 ```
 
-The range workflow also uses the same `barcode_counters` table. Approving a range request reserves numbers by incrementing the package counter. Generating from a range later creates `GeneratedBatch` and `GeneratedBarcode` rows with `source = "range"`.
+The range workflow also uses the same `barcode_counters` table. Counters are tracked by `package_type` and `region_code`; existing legacy counters are stored under the configured `obl_code` region, usually `01`. Approving a range request reserves numbers by incrementing the package counter for the current `obl_code`. Generating from a range later creates `GeneratedBatch` and `GeneratedBarcode` rows with `source = "range"`.
 
 MVP ownership is department-based. Admin sees all data, operators see their own department subtree, and client-role users see only their own department. `/api/clients` and the `clients` table remain only for legacy compatibility and are hidden from the active frontend flow.
 
@@ -209,7 +210,32 @@ Optional frontend env:
 
 ```text
 VITE_API_BASE_URL=/api
+VITE_AUTH_MODE=local
+VITE_SSO_LOGIN_ENABLED=false
 ```
+
+## Enterprise Auth Architecture
+
+QazPostWeb supports three backend auth modes:
+
+- `AUTH_MODE=local`: development/testing mode. Existing username/password login and QazPostWeb JWT tokens continue to work.
+- `AUTH_MODE=external`: production-style Keycloak mode. Protected APIs accept external JWT bearer tokens only.
+- `AUTH_MODE=hybrid`: migration mode. Existing local JWT tokens still work, and external Keycloak JWT tokens are accepted when JWKS is configured.
+
+Keycloak answers who the user is. QazPostWeb still answers what the user can do inside the SHPI system. After an external JWT is validated, the backend resolves the local QazPostWeb user by username, then email. The local `users.role`, `users.department_id`, `users.client_id`, and `users.is_active` continue to control permissions and department ownership.
+
+Example production-style environment, with placeholders only:
+
+```text
+AUTH_MODE=external
+KEYCLOAK_ISSUER_URI=https://keycloak.example.kz/auth/realms/qazpost
+KEYCLOAK_JWKS_URL=https://keycloak.example.kz/auth/realms/qazpost/protocol/openid-connect/certs
+KEYCLOAK_AUDIENCE=qazpost-web
+DATABASE_URL=postgresql+asyncpg://user:changeme@postgres.example.kz:5432/qazpost
+CORS_ORIGINS=https://qazpost-web.example.kz
+```
+
+In production, the backend would normally run in a container, Kubernetes would provide environment variables, and Ingress would expose the backend URL. Passwords, client secrets, database URLs, and private network addresses must be stored in Kubernetes Secrets or another secret manager, never in git.
 
 ## PDF Font Setup
 
@@ -381,6 +407,13 @@ curl "http://127.0.0.1:8000/api/audit-logs?limit=20&offset=0" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
+Admin SHPI Map, counter monitoring only:
+
+```powershell
+curl "http://127.0.0.1:8000/api/admin/shpi-map" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
 ## Barcode Format
 
 Generated SHPI format:
@@ -400,12 +433,14 @@ Rules:
 - Package type must be two uppercase Latin letters.
 - Package type must exist in `barcode_counters`.
 - Each package type has its own counter.
+- Counters are region-aware: `barcode_counters` is unique by `package_type + region_code`.
 - `obl_code` comes from `app_settings`.
 - Default `obl_code` is `01`.
 - Default `country_suffix` is `KZ`.
 - Quantity must be from `1` to `1000`.
 - Counter update and history insert are atomic.
 - Range approval also uses `SELECT FOR UPDATE` on `barcode_counters`.
+- Direct generation and range approval select counters by package type and current `obl_code`.
 - Range approval creates a `barcode_ranges` row.
 - Range generation uses `SELECT FOR UPDATE` on `barcode_ranges`.
 - Range generation creates `GeneratedBatch` and `GeneratedBarcode` rows linked by `range_id`.

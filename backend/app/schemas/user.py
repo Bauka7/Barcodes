@@ -5,7 +5,8 @@ from pydantic import BaseModel
 
 class UserCreate(BaseModel):
     username: str
-    password: str
+    password: str | None = None
+    email: str | None = None
     full_name: str | None = None
     role: str
     department_id: int | None = None
@@ -14,6 +15,7 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
+    email: str | None = None
     full_name: str | None = None
     role: str | None = None
     department_id: int | None = None
@@ -24,6 +26,7 @@ class UserUpdate(BaseModel):
 class UserRead(BaseModel):
     id: int
     username: str
+    email: str | None
     full_name: str | None
     role: str
     department_id: int | None

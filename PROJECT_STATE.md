@@ -21,6 +21,7 @@ The backend currently supports:
 - Legacy clients API, range requests, and barcode range allocation foundation.
 - SHPI generation from allocated barcode ranges.
 - Individual barcode lifecycle tracking.
+- Admin-only SHPI Map for monitoring counters by SHPI code and region.
 
 The backend intentionally does not include:
 
@@ -112,11 +113,12 @@ Fields:
 
 - `id`
 - `package_type`
+- `region_code`
 - `current_value`
 - `created_at`
 - `updated_at`
 
-Each package type has its own counter. Generation locks the counter row using `SELECT FOR UPDATE`.
+Each package type and region has its own counter. Generation locks the counter row using `SELECT FOR UPDATE`. Existing legacy counters are backfilled/imported under the configured `obl_code` region, usually `01`.
 
 ### Department
 
@@ -385,6 +387,14 @@ Admin only:
 ```http
 GET /api/audit-logs
 ```
+
+### Admin SHPI Map
+
+```http
+GET /api/admin/shpi-map
+```
+
+Admin only. Returns `region_codes`, sorted `codes`, and matrix `cells` for counter monitoring. It does not calculate remaining totals, generated totals, printed totals, reports, analytics, or department statistics.
 
 Query params:
 
@@ -726,11 +736,33 @@ Print tracking behavior:
 
 Auth uses JWT bearer access tokens.
 
+Enterprise auth foundation:
+
+- `AUTH_MODE=local` keeps the existing local username/password login and QazPostWeb JWT.
+- `AUTH_MODE=external` accepts only external Keycloak JWT bearer tokens for protected APIs.
+- `AUTH_MODE=hybrid` accepts local JWT and external JWT when Keycloak JWKS is configured.
+- Keycloak identifies users; QazPostWeb local database controls SHPI roles and department permissions.
+- External JWT roles do not replace local QazPostWeb roles.
+- Valid external users must already exist locally by username or email; missing local users receive `403`.
+- External users may have `hashed_password = null`.
+
 Settings:
 
 - `SECRET_KEY`
 - `ACCESS_TOKEN_EXPIRE_MINUTES`
 - `ALGORITHM`, default `HS256`
+- `AUTH_MODE`, default `local`
+- `KEYCLOAK_ISSUER_URI`
+- `KEYCLOAK_JWKS_URL`
+- `KEYCLOAK_AUDIENCE`
+- `KEYCLOAK_USERNAME_CLAIM`, default `preferred_username`
+- `KEYCLOAK_EMAIL_CLAIM`, default `email`
+- `KEYCLOAK_FULL_NAME_CLAIM`, default `name`
+- `APP_CONTEXT_PATH`
+- `SERVER_PORT`
+- `CORS_ORIGINS`
+
+Production-style environment values should be injected by container/Kubernetes configuration. Secrets, passwords, internal IPs, and private URLs must not be committed to git.
 
 Local admin bootstrap:
 
@@ -858,6 +890,13 @@ Migration files:
 - `0006_add_clients_and_ranges.py`
 - `0007_add_range_links_to_generated_history.py`
 - `0008_add_barcode_lifecycle_fields.py`
+- `0009_add_client_id_to_users.py`
+- `0010_add_barcode_code_catalog.py`
+- `0011_range_request_need_fields.py`
+- `0012_add_range_cancellation_fields.py`
+- `0013_add_generated_barcode_actor_fields.py`
+- `0014_add_region_code_to_barcode_counters.py`
+- `0015_prepare_users_for_external_auth.py`
 
 Common commands from `backend/`:
 
@@ -883,6 +922,7 @@ When adding models, register them in `app/models/__init__.py` so Alembic can see
 - Existing seed data must not be overwritten.
 - Legacy options import is the exception: it intentionally overwrites counters and `obl_code`.
 - Package type validation should rely on the `barcode_counters` table, not a small hardcoded list.
+- Counter lookup for generation uses `package_type` plus the current `obl_code` as `region_code`.
 - Missing counter row should return a clear error.
 - MVP UI is department-centric and hides client-company management.
 - Staff-created range requests may be department-only with `client_id = null`.

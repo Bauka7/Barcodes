@@ -130,6 +130,7 @@ async def generate_barcode_numbers(
         result = await session.execute(
             select(BarcodeCounter)
             .where(BarcodeCounter.package_type == normalized_package_type)
+            .where(BarcodeCounter.region_code == obl_code)
             .with_for_update()
         )
         counter = result.scalar_one_or_none()
@@ -180,6 +181,7 @@ async def generate_barcode_numbers_with_history(
         result = await session.execute(
             select(BarcodeCounter)
             .where(BarcodeCounter.package_type == normalized_package_type)
+            .where(BarcodeCounter.region_code == obl_code)
             .with_for_update()
         )
         counter = result.scalar_one_or_none()

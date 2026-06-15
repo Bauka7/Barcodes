@@ -6,10 +6,16 @@ from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.security import decode_access_token, hash_password, verify_password
 from app.db.database import get_db_session
 from app.models import Client, Department, User
 from app.schemas import UserCreate, UserUpdate
+from app.services.external_auth_service import (
+    ExternalAuthConfigurationError,
+    external_auth_is_configured,
+    validate_external_token,
+)
 
 VALID_ROLES = {"admin", "operator", "client"}
 
@@ -40,6 +46,16 @@ async def get_user_by_id(
     user_id: int,
 ) -> User | None:
     result = await session.execute(select(User).where(User.id == user_id))
+    return result.scalar_one_or_none()
+
+
+async def get_user_by_email(
+    session: AsyncSession,
+    email: str,
+) -> User | None:
+    result = await session.execute(
+        select(User).where(User.email == email.strip())
+    )
     return result.scalar_one_or_none()
 
 
@@ -99,6 +115,9 @@ async def authenticate_user(
     if user is None or not user.is_active:
         return None
 
+    if user.hashed_password is None:
+        return None
+
     if not verify_password(password, user.hashed_password):
         return None
 
@@ -114,7 +133,7 @@ async def create_user(
     if not username:
         raise ValueError("username is required.")
 
-    if len(payload.password) < 6:
+    if payload.password is None or len(payload.password) < 6:
         raise ValueError("password must contain at least 6 characters.")
 
     existing_user = await get_user_by_username(session=session, username=username)
@@ -132,6 +151,7 @@ async def create_user(
     user = User(
         username=username,
         hashed_password=hash_password(payload.password),
+        email=payload.email,
         full_name=payload.full_name,
         role=role,
         department_id=payload.department_id,
@@ -152,6 +172,9 @@ async def update_user(
 
     if "full_name" in updated_fields:
         user.full_name = payload.full_name
+
+    if "email" in updated_fields:
+        user.email = payload.email
 
     if "role" in updated_fields and payload.role is not None:
         user.role = validate_role(payload.role)
@@ -175,30 +198,101 @@ async def update_user(
     return user
 
 
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    session: AsyncSession = Depends(get_db_session, use_cache=False),
-) -> User:
-    credentials_exception = HTTPException(
+def _credentials_exception() -> HTTPException:
+    return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials.",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+
+async def _get_current_user_from_local_token(
+    token: str,
+    session: AsyncSession,
+) -> User:
     try:
         payload = decode_access_token(token)
         username = payload.get("sub")
     except JWTError as error:
-        raise credentials_exception from error
+        raise _credentials_exception() from error
 
     if not isinstance(username, str) or not username:
-        raise credentials_exception
+        raise _credentials_exception()
 
     user = await get_user_by_username(session=session, username=username)
     if user is None or not user.is_active:
-        raise credentials_exception
+        raise _credentials_exception()
 
     return user
+
+
+async def _get_current_user_from_external_token(
+    token: str,
+    session: AsyncSession,
+) -> User:
+    settings = get_settings()
+    try:
+        external_user = await validate_external_token(token=token, settings=settings)
+    except ExternalAuthConfigurationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(error),
+        ) from error
+    except JWTError as error:
+        raise _credentials_exception() from error
+
+    user = await get_user_by_username(
+        session=session,
+        username=external_user.username,
+    )
+    if user is None and external_user.email:
+        user = await get_user_by_email(session=session, email=external_user.email)
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "User exists in external identity provider but is not registered "
+                "in QazPostWeb."
+            ),
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is inactive in QazPostWeb.",
+        )
+
+    return user
+
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    session: AsyncSession = Depends(get_db_session, use_cache=False),
+) -> User:
+    auth_mode = get_settings().auth_mode.strip().lower()
+
+    if auth_mode == "local":
+        return await _get_current_user_from_local_token(token=token, session=session)
+
+    if auth_mode == "external":
+        return await _get_current_user_from_external_token(token=token, session=session)
+
+    if auth_mode == "hybrid":
+        try:
+            return await _get_current_user_from_local_token(token=token, session=session)
+        except HTTPException as local_error:
+            if not external_auth_is_configured(get_settings()):
+                raise local_error
+            return await _get_current_user_from_external_token(
+                token=token,
+                session=session,
+            )
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="AUTH_MODE must be one of: local, external, hybrid.",
+    )
 
 
 def require_roles(*roles: str) -> Callable:

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -9,13 +9,20 @@ from app.models.mixins import TimestampMixin
 
 class BarcodeCounter(TimestampMixin, Base):
     __tablename__ = "barcode_counters"
+    __table_args__ = (
+        UniqueConstraint(
+            "package_type",
+            "region_code",
+            name="uq_barcode_counters_package_type_region_code",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     package_type: Mapped[str] = mapped_column(
         String(20),
-        unique=True,
         nullable=False,
     )
+    region_code: Mapped[str] = mapped_column(String(2), nullable=False)
     current_value: Mapped[int] = mapped_column(
         Integer,
         nullable=False,

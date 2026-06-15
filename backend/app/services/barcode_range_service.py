@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import BarcodeCounter, BarcodeRange, RangeRequest, User
 from app.services.barcode_number_service import (
+    DEFAULT_OBL_CODE,
     MAX_COUNTER_VALUE,
+    get_setting_value,
     validate_package_type,
 )
 
@@ -31,16 +33,21 @@ async def create_barcode_range_from_request(
     expires_at: datetime | None = None,
 ) -> BarcodeRange:
     package_type = validate_package_type(range_request.package_type)
+    region_code = await get_setting_value(session, "obl_code", DEFAULT_OBL_CODE)
 
     result = await session.execute(
         select(BarcodeCounter)
         .where(BarcodeCounter.package_type == package_type)
+        .where(BarcodeCounter.region_code == region_code)
         .with_for_update()
     )
     counter = result.scalar_one_or_none()
 
     if counter is None:
-        raise LookupError(f"Counter row for package_type '{package_type}' was not found.")
+        raise LookupError(
+            f"Counter row for package_type '{package_type}' and region_code "
+            f"'{region_code}' was not found."
+        )
 
     start_number = counter.current_value + 1
     end_number = counter.current_value + range_request.requested_quantity

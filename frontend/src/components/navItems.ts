@@ -19,6 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'journal', path: '/journal', icon: 'history', roles: ['admin', 'operator'] },
   { key: 'search', path: '/search', icon: 'search', roles: ['admin', 'operator'] },
   { key: 'departments', path: '/departments', icon: 'sitemap', roles: ['admin', 'operator'] },
+  { key: 'shpiMap', path: '/shpi-map', icon: 'map', roles: ['admin'] },
   { key: 'users', path: '/users', icon: 'users', roles: ['admin'] },
   { key: 'audit', path: '/audit', icon: 'clipboard-list', roles: ['admin'] },
   { key: 'settings', path: '/settings', icon: 'settings', roles: ['admin'] },

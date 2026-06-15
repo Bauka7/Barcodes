@@ -10,6 +10,7 @@ import SearchPage from './pages/SearchPage';
 import BarcodeDetailPage from './pages/BarcodeDetailPage';
 import DepartmentsPage from './pages/DepartmentsPage';
 import MyRangesPage from './pages/MyRangesPage';
+import ShpiMapPage from './pages/ShpiMapPage';
 import UsersPage from './pages/UsersPage';
 import AuditPage from './pages/AuditPage';
 import SettingsPage from './pages/SettingsPage';
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="/departments" element={gated(STAFF, <DepartmentsPage />)} />
 
         {/* admin */}
+        <Route path="/shpi-map" element={gated(ADMIN, <ShpiMapPage />)} />
         <Route path="/users" element={gated(ADMIN, <UsersPage />)} />
         <Route path="/audit" element={gated(ADMIN, <AuditPage />)} />
         <Route path="/settings" element={gated(ADMIN, <SettingsPage />)} />

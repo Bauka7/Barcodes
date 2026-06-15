@@ -4,7 +4,7 @@ FastAPI backend for a KazPost-style barcode generation system.
 
 The project currently includes the application scaffold, async database setup, migrations, seed data, and barcode number generation endpoints.
 
-It also includes authentication, roles, audit logging, legacy clients API, range requests, barcode range allocation, SHPI generation from allocated ranges, and individual SHPI lifecycle tracking.
+It also includes authentication, roles, audit logging, legacy clients API, range requests, barcode range allocation, SHPI generation from allocated ranges, individual SHPI lifecycle tracking, and an admin-only SHPI Map for counter monitoring by code and region.
 
 ## Requirements
 
@@ -48,6 +48,36 @@ Copy-Item .env.example .env
 Update `DATABASE_URL` in `.env` if your PostgreSQL username, password, host, port, or database name are different.
 
 For local development, `.env.example` includes a placeholder `SECRET_KEY`. In production, replace it with a long random secret and keep it private.
+
+## Enterprise Auth Architecture
+
+Backend auth modes:
+
+- `AUTH_MODE=local`: keeps the current local username/password login and local QazPostWeb JWT.
+- `AUTH_MODE=external`: accepts only external Keycloak JWT bearer tokens on protected APIs.
+- `AUTH_MODE=hybrid`: accepts local JWT and, when configured, external Keycloak JWT.
+
+External identity provider integration follows this split:
+
+- Keycloak identifies the person.
+- QazPostWeb local database stores SHPI permissions.
+- `users.role`, `users.department_id`, `users.client_id`, and `users.is_active` remain the source of authorization.
+- External JWT roles do not replace QazPostWeb roles yet.
+
+External users must already exist in QazPostWeb. The backend resolves them by username, then email. If a valid external token belongs to a user that is not registered locally, the API returns `403`.
+
+Safe production-style example:
+
+```text
+AUTH_MODE=external
+KEYCLOAK_ISSUER_URI=https://keycloak.example.kz/auth/realms/qazpost
+KEYCLOAK_JWKS_URL=https://keycloak.example.kz/auth/realms/qazpost/protocol/openid-connect/certs
+KEYCLOAK_AUDIENCE=qazpost-web
+DATABASE_URL=postgresql+asyncpg://user:changeme@postgres.example.kz:5432/qazpost
+CORS_ORIGINS=https://qazpost-web.example.kz
+```
+
+For Kubernetes deployment, provide these values through environment variables. Store passwords, client secrets, database credentials, and private URLs in Kubernetes Secrets or a secret manager, not in repository files.
 
 ## Run
 
@@ -275,6 +305,18 @@ Audit logs, admin only:
 curl "http://127.0.0.1:8000/api/audit-logs?limit=20&offset=0" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
+
+## SHPI Map
+
+Admin-only counter monitoring:
+
+```http
+GET /api/admin/shpi-map
+```
+
+The response contains `region_codes` from `01` through `19`, sorted `codes`, and matrix `cells` for each code-region counter value.
+
+Cell status is `gray` for missing or zero counters, `green` for counters from `1` to `999998`, and `red` for counters at `999999` or above.
 
 ## Legacy Clients
 
