@@ -55,11 +55,14 @@ DEFAULT_SETTINGS = {
 async def seed_barcode_counters() -> tuple[int, int]:
     created_count = 0
     skipped_count = 0
+    region_code = DEFAULT_SETTINGS["obl_code"]
 
     async with AsyncSessionLocal() as session:
         for package_type in DEFAULT_PACKAGE_TYPES:
             result = await session.execute(
-                select(BarcodeCounter).where(BarcodeCounter.package_type == package_type)
+                select(BarcodeCounter)
+                .where(BarcodeCounter.package_type == package_type)
+                .where(BarcodeCounter.region_code == region_code)
             )
             existing_counter = result.scalar_one_or_none()
 
@@ -67,7 +70,13 @@ async def seed_barcode_counters() -> tuple[int, int]:
                 skipped_count += 1
                 continue
 
-            session.add(BarcodeCounter(package_type=package_type, current_value=0))
+            session.add(
+                BarcodeCounter(
+                    package_type=package_type,
+                    region_code=region_code,
+                    current_value=0,
+                )
+            )
             created_count += 1
 
         await session.commit()

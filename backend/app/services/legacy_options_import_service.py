@@ -94,11 +94,14 @@ async def import_legacy_options(
     updated_settings = 0
     skipped_settings = 0
 
+    raw_region_code = main_settings["oblCode"].strip()
+    region_code = raw_region_code if len(raw_region_code) == 2 and raw_region_code.isdigit() else "01"
+
     async with session.begin():
         obl_code_status = await upsert_app_setting(
             session=session,
             key="obl_code",
-            value=main_settings["oblCode"].strip(),
+            value=region_code,
         )
         if obl_code_status == "created":
             created_settings += 1
@@ -139,7 +142,9 @@ async def import_legacy_options(
                 continue
 
             result = await session.execute(
-                select(BarcodeCounter).where(BarcodeCounter.package_type == package_type)
+                select(BarcodeCounter)
+                .where(BarcodeCounter.package_type == package_type)
+                .where(BarcodeCounter.region_code == region_code)
             )
             counter = result.scalar_one_or_none()
 
@@ -147,6 +152,7 @@ async def import_legacy_options(
                 session.add(
                     BarcodeCounter(
                         package_type=package_type,
+                        region_code=region_code,
                         current_value=current_value,
                     )
                 )

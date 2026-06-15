@@ -24,6 +24,7 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'departments', path: '/departments', icon: 'sitemap', roles: ['admin', 'operator'] },
   { key: 'ranges', path: '/ranges', icon: 'ruler-2', roles: ['admin', 'operator'] },
   { key: 'codes', path: '/codes', icon: 'barcode', roles: ['admin', 'operator'] },
+  { key: 'shpiMap', path: '/shpi-map', icon: 'map', roles: ['admin'] },
   { key: 'users', path: '/users', icon: 'users', roles: ['admin'] },
   { key: 'audit', path: '/audit', icon: 'clipboard-list', roles: ['admin'] },
   { key: 'settings', path: '/settings', icon: 'settings', roles: ['admin'] },

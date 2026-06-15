@@ -26,6 +26,7 @@ from app.schemas.range_generation import (
     RangeGenerateRequest,
     RangeRemainingResponse,
 )
+from app.schemas.shpi_map import ShpiMapCodeItem, ShpiMapResponse
 from app.schemas.auth import Token, TokenData
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 
@@ -56,6 +57,8 @@ __all__ = [
     "RangeCancelRequest",
     "RangeGenerateRequest",
     "RangeRemainingResponse",
+    "ShpiMapCodeItem",
+    "ShpiMapResponse",
     "Token",
     "TokenData",
     "UserCreate",

@@ -16,6 +16,7 @@ def user_to_schema(user: User) -> UserRead:
     return UserRead(
         id=user.id,
         username=user.username,
+        email=user.email,
         full_name=user.full_name,
         role=user.role,
         department_id=user.department_id,

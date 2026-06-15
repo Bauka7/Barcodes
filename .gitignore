@@ -1,4 +1,6 @@
 JavaCode/
+.codex-reference/
+administration-dev.yaml
 backend/.env
 
 # Python cache files

@@ -16,6 +16,7 @@ import RangesPage from './pages/RangesPage';
 import RangeRequestsPage from './pages/RangeRequestsPage';
 import MyRangesPage from './pages/MyRangesPage';
 import CodesPage from './pages/CodesPage';
+import ShpiMapPage from './pages/ShpiMapPage';
 import UsersPage from './pages/UsersPage';
 import AuditPage from './pages/AuditPage';
 import SettingsPage from './pages/SettingsPage';
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="/codes" element={gated(STAFF, <CodesPage />)} />
 
         {/* admin */}
+        <Route path="/shpi-map" element={gated(ADMIN, <ShpiMapPage />)} />
         <Route path="/users" element={gated(ADMIN, <UsersPage />)} />
         <Route path="/audit" element={gated(ADMIN, <AuditPage />)} />
         <Route path="/settings" element={gated(ADMIN, <SettingsPage />)} />
