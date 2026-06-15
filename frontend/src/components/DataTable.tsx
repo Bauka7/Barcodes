@@ -14,6 +14,7 @@ interface Props<T> {
   rows: T[];
   rowKey: (row: T) => string | number;
   onRowClick?: (row: T) => void;
+  rowClassName?: (row: T) => string;
   empty?: ReactNode;
   loading?: boolean;
 }
@@ -21,7 +22,15 @@ interface Props<T> {
 const alignCls = (align?: 'left' | 'right') => (align === 'right' ? 'text-right' : 'text-left');
 
 // Универсальная таблица-список (архетип design-reference.html).
-export function DataTable<T>({ columns, rows, rowKey, onRowClick, empty, loading }: Props<T>) {
+export function DataTable<T>({
+  columns,
+  rows,
+  rowKey,
+  onRowClick,
+  rowClassName,
+  empty,
+  loading,
+}: Props<T>) {
   return (
     <div className="overflow-hidden rounded-ctl border-[0.5px] border-bd3">
       <table className="w-full border-collapse text-[16px]">
@@ -55,7 +64,9 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, empty, loading
               <tr
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={`border-t-[0.5px] border-bd3 ${onRowClick ? 'cursor-pointer hover:bg-bg2' : ''}`}
+                className={`border-t-[0.5px] border-bd3 transition-colors ${
+                  onRowClick ? 'cursor-pointer hover:bg-bg2' : 'hover:bg-bg2'
+                } ${rowClassName?.(row) ?? ''}`}
               >
                 {columns.map((c) => (
                   <td

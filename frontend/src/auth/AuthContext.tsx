@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { clearToken, getToken, setAuthErrorHandler, setToken } from '../api/client';
 import { getMe, login as apiLogin, type Me } from '../api/auth';
@@ -23,24 +24,32 @@ const AuthCtx = createContext<AuthValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<Me | null>(null);
   // если токен уже сохранён — проверяем его через /me ('loading')
   const [status, setStatus] = useState<Status>(() =>
     getToken() ? 'loading' : 'unauthenticated',
   );
 
+  const clearSessionCache = useCallback(() => {
+    void queryClient.cancelQueries();
+    queryClient.clear();
+  }, [queryClient]);
+
   const logout = useCallback(() => {
     clearToken();
+    clearSessionCache();
     setUser(null);
     setStatus('unauthenticated');
     navigate('/login', { replace: true });
-  }, [navigate]);
+  }, [clearSessionCache, navigate]);
 
   // Глобальная обработка 401/403 из client.ts (раздел 3 брифа).
   useEffect(() => {
     setAuthErrorHandler((s) => {
       if (s === 401) {
         clearToken();
+        clearSessionCache();
         setUser(null);
         setStatus('unauthenticated');
         navigate('/login', { replace: true });
@@ -49,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // ProtectedRoute (по роли) или сама страница; глобально не разлогиниваем.
     });
     return () => setAuthErrorHandler(null);
-  }, [navigate]);
+  }, [clearSessionCache, navigate]);
 
   // Восстановление сессии по сохранённому токену при загрузке.
   useEffect(() => {
@@ -65,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         if (alive) {
           clearToken();
+          clearSessionCache();
           setUser(null);
           setStatus('unauthenticated');
         }
@@ -72,16 +82,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [clearSessionCache]);
 
   const login = useCallback(async (username: string, password: string) => {
-    const { access_token } = await apiLogin(username, password);
-    setToken(access_token);
-    const me = await getMe();
-    setUser(me);
-    setStatus('authenticated');
-    return me;
-  }, []);
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    try {
+      const { access_token } = await apiLogin(username, password);
+      setToken(access_token);
+      const me = await getMe();
+      setUser(me);
+      setStatus('authenticated');
+      return me;
+    } catch (error) {
+      clearToken();
+      queryClient.clear();
+      setUser(null);
+      setStatus('unauthenticated');
+      throw error;
+    }
+  }, [queryClient]);
 
   return <AuthCtx.Provider value={{ status, user, login, logout }}>{children}</AuthCtx.Provider>;
 }

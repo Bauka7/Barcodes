@@ -4,22 +4,18 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import type { Role } from './types';
 import LoginPage from './pages/LoginPage';
-import GeneratePage from './pages/GeneratePage';
 import JournalPage from './pages/JournalPage';
 import BatchDetailPage from './pages/BatchDetailPage';
 import SearchPage from './pages/SearchPage';
 import BarcodeDetailPage from './pages/BarcodeDetailPage';
-import LifecyclePage from './pages/LifecyclePage';
-import PrintPage from './pages/PrintPage';
 import DepartmentsPage from './pages/DepartmentsPage';
-import RangesPage from './pages/RangesPage';
 import RangeRequestsPage from './pages/RangeRequestsPage';
 import MyRangesPage from './pages/MyRangesPage';
-import CodesPage from './pages/CodesPage';
 import ShpiMapPage from './pages/ShpiMapPage';
 import UsersPage from './pages/UsersPage';
 import AuditPage from './pages/AuditPage';
 import SettingsPage from './pages/SettingsPage';
+import ProfilePage from './pages/ProfilePage';
 
 const STAFF: Role[] = ['admin', 'operator'];
 const ADMIN: Role[] = ['admin'];
@@ -33,7 +29,7 @@ function gated(roles: Role[], el: React.ReactNode) {
 // Стартовая страница зависит от роли: сотрудник → Генерация, клиент → Мои диапазоны.
 function HomeRedirect() {
   const { user } = useAuth();
-  const to = user?.role === 'client' ? '/my-ranges' : '/generate';
+  const to = user?.role === 'client' ? '/my-ranges' : '/departments';
   return <Navigate to={to} replace />;
 }
 
@@ -54,21 +50,17 @@ export default function App() {
 
         {/* все роли */}
         <Route path="/barcodes/:barcode" element={<BarcodeDetailPage />} />
-        <Route path="/range-requests" element={<RangeRequestsPage />} />
 
         {/* client */}
         <Route path="/my-ranges" element={gated(CLIENT, <MyRangesPage />)} />
+        <Route path="/range-requests" element={gated(['operator', 'client'], <RangeRequestsPage />)} />
+        <Route path="/profile" element={gated(CLIENT, <ProfilePage />)} />
 
         {/* admin/operator */}
-        <Route path="/generate" element={gated(STAFF, <GeneratePage />)} />
         <Route path="/journal" element={gated(STAFF, <JournalPage />)} />
         <Route path="/journal/:batchId" element={gated(STAFF, <BatchDetailPage />)} />
         <Route path="/search" element={gated(STAFF, <SearchPage />)} />
-        <Route path="/lifecycle" element={gated(STAFF, <LifecyclePage />)} />
-        <Route path="/print" element={gated(STAFF, <PrintPage />)} />
         <Route path="/departments" element={gated(STAFF, <DepartmentsPage />)} />
-        <Route path="/ranges" element={gated(STAFF, <RangesPage />)} />
-        <Route path="/codes" element={gated(STAFF, <CodesPage />)} />
 
         {/* admin */}
         <Route path="/shpi-map" element={gated(ADMIN, <ShpiMapPage />)} />

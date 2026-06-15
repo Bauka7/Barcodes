@@ -24,12 +24,11 @@ export const createRangeRequest = (body: RangeRequestCreate): Promise<RangeReque
 export const approveRangeRequest = (
   id: number,
   approved_code: string,
-  expires_at?: string,
   notes?: string,
 ): Promise<RangeRequestRead> =>
   apiFetch<RangeRequestRead>(`/range-requests/${id}/approve`, {
     method: 'POST',
-    body: { approved_code, expires_at, notes },
+    body: { approved_code, notes },
   });
 
 export const rejectRangeRequest = (id: number, notes?: string): Promise<RangeRequestRead> =>

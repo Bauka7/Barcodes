@@ -4,10 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { createUser, listUsers, updateUser } from '../api/users';
 import type { DepartmentTreeItem, UserRead } from '../api/types';
 import type { Role } from '../types';
+import { useAuth } from '../auth/AuthContext';
 import { useDepartmentTree } from '../lib/departmentName';
 import { DataTable, type Column } from '../components/DataTable';
 import { Chip, type ChipTone } from '../components/Chip';
 import { Drawer } from '../components/Drawer';
+import { DepartmentPicker } from '../components/DepartmentPicker';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Button, ErrorText, Field, Input, PageHeader, Select } from '../components/ui';
 
 const ROLE_TONE: Record<string, ChipTone> = { admin: 'info', operator: 'ok', client: 'muted' };
@@ -26,40 +29,38 @@ const ROLE_HELP: Record<Role, string> = {
 
 type DepartmentOption = {
   id: number;
-  label: string;
   displayName: string;
 };
 
 function flattenDepartmentOptions(nodes: DepartmentTreeItem[]): DepartmentOption[] {
   const out: DepartmentOption[] = [];
 
-  const walk = (items: DepartmentTreeItem[], depth: number, parents: string[]) => {
+  const walk = (items: DepartmentTreeItem[], parents: string[]) => {
     for (const item of items) {
       const code = item.code ? ` (${item.code})` : '';
-      const prefix = depth === 0 ? '' : `${'—'.repeat(depth)} `;
       const fallbackPath = [...parents, item.name].join(' / ');
       const displayName = item.full_path || fallbackPath || item.name;
 
       out.push({
         id: item.id,
-        label: `${prefix}${item.name}${code}`,
         displayName: `${displayName}${code}`,
       });
 
       if (item.children?.length) {
-        walk(item.children, depth + 1, [...parents, item.name]);
+        walk(item.children, [...parents, item.name]);
       }
     }
   };
 
-  walk(nodes, 0, []);
+  walk(nodes, []);
   return out;
 }
 
 export default function UsersPage() {
   const { t } = useTranslation();
+  const { user: currentUser } = useAuth();
   const qc = useQueryClient();
-  const { data: tree } = useDepartmentTree();
+  const { data: tree, isLoading: departmentsLoading } = useDepartmentTree();
   const depts = useMemo(() => flattenDepartmentOptions(tree ?? []), [tree]);
   const deptLabelById = useMemo(() => new Map(depts.map((d) => [d.id, d.displayName])), [depts]);
 
@@ -76,6 +77,7 @@ export default function UsersPage() {
   const [role, setRole] = useState<Role>('operator');
   const [departmentId, setDepartmentId] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [statusTarget, setStatusTarget] = useState<UserRead | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -119,6 +121,17 @@ export default function UsersPage() {
     },
   });
 
+  const changeStatus = useMutation({
+    mutationFn: (target: UserRead) =>
+      updateUser(target.id, {
+        is_active: !target.is_active,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      setStatusTarget(null);
+    },
+  });
+
   const columns: Column<UserRead>[] = [
     { key: 'name', header: t('users.fullName'), render: (r) => r.full_name ?? '—' },
     { key: 'login', header: t('users.login'), render: (r) => <span className="font-mono">{r.username}</span> },
@@ -140,25 +153,59 @@ export default function UsersPage() {
       header: t('users.status'),
       render: (r) =>
         r.is_active ? (
-          <span className="text-st">{t('users.activeStatus')}</span>
+          <span className="inline-flex items-center gap-1.5 text-st">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" />
+            {t('users.activeStatus')}
+          </span>
         ) : (
-          <span className="text-t3">{t('users.inactiveStatus')}</span>
+          <span className="inline-flex items-center gap-1.5 text-t3">
+            <span className="h-1.5 w-1.5 rounded-full bg-t3" />
+            {t('users.inactiveStatus')}
+          </span>
         ),
     },
     {
-      key: 'edit',
+      key: 'actions',
       header: '',
       align: 'right',
       render: (r) => (
-        <Button
-          size="sm"
-          onClick={() => {
-            setEditing(r);
-            setOpen(true);
-          }}
-        >
-          <i className="ti ti-pencil" />
-        </Button>
+        <div className="flex justify-end gap-1.5">
+          <Button
+            size="sm"
+            title={t('users.edit')}
+            aria-label={t('users.edit')}
+            onClick={() => {
+              setEditing(r);
+              setOpen(true);
+            }}
+          >
+            <i className="ti ti-pencil" />
+          </Button>
+          <Button
+            size="sm"
+            variant={r.is_active ? 'default' : 'primary'}
+            className={r.is_active ? 'border-danger bg-dx text-dt hover:bg-danger hover:text-white' : ''}
+            title={
+              r.id === currentUser?.id
+                ? t('users.cannotDisableSelf')
+                : r.is_active
+                  ? t('users.disable')
+                  : t('users.restore')
+            }
+            aria-label={
+              r.id === currentUser?.id
+                ? t('users.cannotDisableSelf')
+                : r.is_active
+                  ? t('users.disable')
+                  : t('users.restore')
+            }
+            disabled={r.id === currentUser?.id}
+            onClick={() => setStatusTarget(r)}
+          >
+            <i className={`ti ti-${r.is_active ? 'user-off' : 'user-check'}`} />
+            {r.is_active ? t('users.disable') : t('users.restore')}
+          </Button>
+        </div>
       ),
     },
   ];
@@ -184,10 +231,27 @@ export default function UsersPage() {
       {isError ? (
         <ErrorText error={error} />
       ) : (
-        <DataTable columns={columns} rows={data ?? []} rowKey={(r) => r.id} loading={isLoading} empty="—" />
+        <DataTable
+          columns={columns}
+          rows={data ?? []}
+          rowKey={(r) => r.id}
+          rowClassName={(r) => (r.is_active ? '' : 'bg-bg2/70')}
+          loading={isLoading}
+          empty="—"
+        />
+      )}
+      {changeStatus.isError && (
+        <div className="mt-3">
+          <ErrorText error={changeStatus.error} />
+        </div>
       )}
 
-      <Drawer open={open} onClose={() => setOpen(false)} title={editing ? t('users.edit') : t('users.new')}>
+      <Drawer
+        open={open}
+        onClose={() => setOpen(false)}
+        title={editing ? t('users.edit') : t('users.new')}
+        width="wide"
+      >
         <Field label={t('users.login')}>
           <Input
             value={username}
@@ -214,14 +278,13 @@ export default function UsersPage() {
           <p className="mt-1 text-[14px] text-t2">{ROLE_HELP[role]}</p>
         </Field>
         <Field label={t('users.department')}>
-          <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">{role === 'admin' ? 'Без подразделения' : 'Выберите подразделение'}</option>
-            {depts.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.label}
-              </option>
-            ))}
-          </Select>
+          <DepartmentPicker
+            nodes={tree ?? []}
+            value={departmentId ? Number(departmentId) : null}
+            onChange={(id) => setDepartmentId(id === null ? '' : String(id))}
+            allowClear={role === 'admin'}
+            loading={departmentsLoading}
+          />
           {missingRequiredDepartment && (
             <p className="mt-1 text-[14px] text-dt">Для этой роли нужно выбрать подразделение.</p>
           )}
@@ -240,6 +303,24 @@ export default function UsersPage() {
           <Button onClick={() => setOpen(false)}>{t('actions.cancel')}</Button>
         </div>
       </Drawer>
+
+      <ConfirmDialog
+        open={statusTarget !== null}
+        title={statusTarget?.is_active ? t('users.disableTitle') : t('users.restoreTitle')}
+        message={
+          statusTarget
+            ? t(statusTarget.is_active ? 'users.disableMessage' : 'users.restoreMessage', {
+                name: statusTarget.full_name || statusTarget.username,
+                username: statusTarget.username,
+              })
+            : undefined
+        }
+        confirmLabel={statusTarget?.is_active ? t('users.disable') : t('users.restore')}
+        danger={statusTarget?.is_active}
+        busy={changeStatus.isPending}
+        onConfirm={() => statusTarget && changeStatus.mutate(statusTarget)}
+        onCancel={() => setStatusTarget(null)}
+      />
     </div>
   );
 }
