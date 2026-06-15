@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -11,7 +11,7 @@ import {
 import { listBarcodeCodes } from '../api/barcodeCodes';
 import type { RangeRequestRead } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
-import { flattenDepartments, useDepartmentName, useDepartmentTree } from '../lib/departmentName';
+import { useDepartmentName } from '../lib/departmentName';
 import { DataTable, type Column } from '../components/DataTable';
 import { StatusBadge } from '../components/StatusBadge';
 import { Drawer } from '../components/Drawer';
@@ -24,9 +24,6 @@ export default function RangeRequestsPage() {
   const { user } = useAuth();
   const isStaff = user?.role === 'admin' || user?.role === 'operator';
   const deptName = useDepartmentName();
-
-  const { data: tree } = useDepartmentTree();
-  const depts = useMemo(() => flattenDepartments(tree ?? []), [tree]);
 
   // Справочник кодов для одобрения (только сотрудники).
   const codesQ = useQuery({
@@ -45,14 +42,12 @@ export default function RangeRequestsPage() {
   const [purpose, setPurpose] = useState('');
   const [quantity, setQuantity] = useState('100');
   const [requestedCode, setRequestedCode] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
   const [notes, setNotes] = useState('');
 
   const resetCreate = () => {
     setPurpose('');
     setQuantity('100');
     setRequestedCode('');
-    setDepartmentId('');
     setNotes('');
   };
 
@@ -61,7 +56,7 @@ export default function RangeRequestsPage() {
       createRangeRequest({
         purpose: purpose.trim(),
         requested_quantity: Number(quantity),
-        department_id: Number(departmentId),
+        department_id: user?.department_id ?? 0,
         requested_code: requestedCode.trim() ? requestedCode.trim().toUpperCase() : undefined,
         request_type: 'issue_range',
         notes: notes.trim() || undefined,
@@ -79,24 +74,17 @@ export default function RangeRequestsPage() {
   >(null);
   const [approveFor, setApproveFor] = useState<RangeRequestRead | null>(null);
   const [approveCode, setApproveCode] = useState('');
-  const [approveExpires, setApproveExpires] = useState('');
   const [approveNotes, setApproveNotes] = useState('');
 
   const openApprove = (r: RangeRequestRead) => {
     setApproveFor(r);
     setApproveCode((r.requested_code ?? '').toUpperCase());
-    setApproveExpires('');
     setApproveNotes('');
   };
 
   const approve = useMutation({
-    mutationFn: ({ id, code, expires, notes }: { id: number; code: string; expires: string; notes: string }) =>
-      approveRangeRequest(
-        id,
-        code,
-        expires ? new Date(`${expires}T23:59:59`).toISOString() : undefined,
-        notes || undefined,
-      ),
+    mutationFn: ({ id, code, notes }: { id: number; code: string; notes: string }) =>
+      approveRangeRequest(id, code, notes || undefined),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['range-requests'] });
       setApproveFor(null);
@@ -177,7 +165,7 @@ export default function RangeRequestsPage() {
   const validCreate =
     purpose.trim().length > 0 &&
     Number(quantity) >= 1 &&
-    departmentId !== '' &&
+    user?.department_id != null &&
     (requestedCode.trim() === '' || /^[A-Za-z]{2}$/.test(requestedCode.trim()));
 
   const validApprove = /^[A-Za-z]{2}$/.test(approveCode.trim());
@@ -187,11 +175,11 @@ export default function RangeRequestsPage() {
       <PageHeader
         title={t('requests.title')}
         subtitle={t('requests.subtitle')}
-        actions={
+        actions={!isStaff ? (
           <Button variant="primary" onClick={() => setOpen(true)}>
             <i className="ti ti-plus" /> {t('requests.new')}
           </Button>
-        }
+        ) : undefined}
       />
 
       {isError ? (
@@ -225,14 +213,13 @@ export default function RangeRequestsPage() {
           />
         </Field>
         <Field label={t('requests.department')}>
-          <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-            <option value="">{t('requests.departmentPh')}</option>
-            {depts.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.full_path ?? d.name}
-              </option>
-            ))}
-          </Select>
+          <div className="rounded-ctl border-[0.5px] border-bd2 bg-bg2 px-3 py-2">
+            {user?.department_id != null ? (
+              <div className="text-[15px] text-t1">{deptName(user.department_id)}</div>
+            ) : (
+              <div className="text-[15px] text-dt">{t('requests.departmentMissing')}</div>
+            )}
+          </div>
         </Field>
         <Field label={t('requests.requestedCode')}>
           <Input
@@ -281,13 +268,6 @@ export default function RangeRequestsPage() {
                 ))}
               </Select>
             </Field>
-            <Field label={t('requests.expiresOptional')}>
-              <Input
-                type="date"
-                value={approveExpires}
-                onChange={(e) => setApproveExpires(e.target.value)}
-              />
-            </Field>
             <Field label={t('actions.notesOptional')}>
               <Textarea
                 rows={2}
@@ -305,7 +285,6 @@ export default function RangeRequestsPage() {
                   approve.mutate({
                     id: approveFor.id,
                     code: approveCode.trim().toUpperCase(),
-                    expires: approveExpires,
                     notes: approveNotes,
                   })
                 }

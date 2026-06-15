@@ -15,6 +15,7 @@ export interface NavItem {
 //   Прямая генерация и журнал клиенту недоступны (на бэке 403).
 export const NAV_ITEMS: NavItem[] = [
   { key: 'myranges', path: '/my-ranges', icon: 'ticket', roles: ['client'] },
+  { key: 'requests', path: '/range-requests', icon: 'inbox', roles: ['operator', 'client'] },
   { key: 'profile', path: '/profile', icon: 'user-circle', roles: ['client'] },
   { key: 'journal', path: '/journal', icon: 'history', roles: ['admin', 'operator'] },
   { key: 'search', path: '/search', icon: 'search', roles: ['admin', 'operator'] },

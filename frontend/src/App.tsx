@@ -9,6 +9,7 @@ import BatchDetailPage from './pages/BatchDetailPage';
 import SearchPage from './pages/SearchPage';
 import BarcodeDetailPage from './pages/BarcodeDetailPage';
 import DepartmentsPage from './pages/DepartmentsPage';
+import RangeRequestsPage from './pages/RangeRequestsPage';
 import MyRangesPage from './pages/MyRangesPage';
 import ShpiMapPage from './pages/ShpiMapPage';
 import UsersPage from './pages/UsersPage';
@@ -52,6 +53,7 @@ export default function App() {
 
         {/* client */}
         <Route path="/my-ranges" element={gated(CLIENT, <MyRangesPage />)} />
+        <Route path="/range-requests" element={gated(['operator', 'client'], <RangeRequestsPage />)} />
         <Route path="/profile" element={gated(CLIENT, <ProfilePage />)} />
 
         {/* admin/operator */}
