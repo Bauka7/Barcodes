@@ -17,8 +17,8 @@
     "settings": "Настройки"
   },
   "shell": {
-    "brand": "QazPost",
-    "brandTag": "ШПИ",
+    "brand": "Barcodes",
+    "brandTag": "",
     "logout": "Выйти",
     "theme": "Тема",
     "menu": "Меню",
@@ -26,7 +26,7 @@
     "scaffoldBody": "Текущий пункт: {{title}}"
   },
   "login": {
-    "title": "QazPost ШПИ",
+    "title": "Barcodes",
     "subtitle": "Генерация и печать штрихкодов",
     "username": "Логин",
     "password": "Пароль",

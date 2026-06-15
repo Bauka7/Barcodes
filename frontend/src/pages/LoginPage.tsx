@@ -1,18 +1,13 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthContext';
 import { LangSwitch } from '../components/LangSwitch';
 import { ApiError } from '../api/client';
 
-interface FromState {
-  from?: { pathname?: string };
-}
-
 export default function LoginPage() {
   const { status, login } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const { t } = useTranslation();
 
   const [username, setUsername] = useState('');
@@ -21,8 +16,9 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const ssoLoginEnabled = import.meta.env.VITE_SSO_LOGIN_ENABLED === 'true';
 
-  // куда вернуться после входа: исходный маршрут или дашборд (Генерация — доступна всем)
-  const dest = (location.state as FromState | null)?.from?.pathname ?? '/generate';
+  // после входа — на стартовую по роли через HomeRedirect ('/'):
+  // staff → Генерация, client → Мои диапазоны. Так никто не упирается в «Нет доступа».
+  const dest = '/';
 
   // уже вошёл — на дашборд
   if (status === 'authenticated') {

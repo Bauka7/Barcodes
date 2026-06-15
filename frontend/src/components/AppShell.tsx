@@ -40,7 +40,7 @@ export function AppShell() {
               <i className="ti ti-barcode" />
             </div>
             <span className="font-medium">
-              QazPost <span className="text-[15px] text-t2">ШПИ</span>
+              Barcodes
             </span>
           </div>
         </header>
