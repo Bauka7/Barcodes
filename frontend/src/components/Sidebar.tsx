@@ -25,7 +25,7 @@ export function Sidebar({ role, onLogout, onNavigate }: Props) {
           <i className="ti ti-barcode text-[24px]" />
         </div>
         <div className="text-[18px] font-medium">
-          QazPost <span className="text-[15px] text-t2">ШПИ</span>
+          Barcodes
         </div>
       </div>
 

@@ -16,8 +16,8 @@
     "settings": "Баптаулар"
   },
   "shell": {
-    "brand": "QazPost",
-    "brandTag": "ШПИ",
+    "brand": "Barcodes",
+    "brandTag": "",
     "logout": "Шығу",
     "theme": "Тақырып",
     "menu": "Мәзір",
@@ -25,7 +25,7 @@
     "scaffoldBody": "Ағымдағы тармақ: {{title}}"
   },
   "login": {
-    "title": "QazPost ШПИ",
+    "title": "Barcodes",
     "subtitle": "Штрихкодтарды жасау және басып шығару",
     "username": "Логин",
     "password": "Құпиясөз",
