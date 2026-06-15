@@ -10,7 +10,7 @@ export interface NavItem {
 }
 
 // Навигация по ролям («идеальный проект»).
-// admin: всё. operator: всё кроме Пользователи/Аудит/Настройки (Клиенты — просмотр).
+// admin: всё. operator: всё кроме Пользователи/Аудит/Настройки.
 // client: «Мои заявки» (потребности) + «Мои диапазоны» (выданные коды → генерация/печать).
 //   Прямая генерация и журнал клиенту недоступны (на бэке 403).
 export const NAV_ITEMS: NavItem[] = [
@@ -24,7 +24,6 @@ export const NAV_ITEMS: NavItem[] = [
   { key: 'departments', path: '/departments', icon: 'sitemap', roles: ['admin', 'operator'] },
   { key: 'ranges', path: '/ranges', icon: 'ruler-2', roles: ['admin', 'operator'] },
   { key: 'codes', path: '/codes', icon: 'barcode', roles: ['admin', 'operator'] },
-  { key: 'clients', path: '/clients', icon: 'building-store', roles: ['admin', 'operator'] },
   { key: 'users', path: '/users', icon: 'users', roles: ['admin'] },
   { key: 'audit', path: '/audit', icon: 'clipboard-list', roles: ['admin'] },
   { key: 'settings', path: '/settings', icon: 'settings', roles: ['admin'] },

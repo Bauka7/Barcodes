@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import decode_access_token, hash_password, verify_password
 from app.db.database import get_db_session
-from app.models import User
+from app.models import Client, Department, User
 from app.schemas import UserCreate, UserUpdate
 
 VALID_ROLES = {"admin", "operator", "client"}
@@ -41,6 +41,52 @@ async def get_user_by_id(
 ) -> User | None:
     result = await session.execute(select(User).where(User.id == user_id))
     return result.scalar_one_or_none()
+
+
+async def _validate_department_exists(
+    session: AsyncSession,
+    department_id: int | None,
+) -> None:
+    if department_id is None:
+        return
+
+    result = await session.execute(
+        select(Department.id).where(Department.id == department_id)
+    )
+    if result.scalar_one_or_none() is None:
+        raise ValueError(f"Department with id {department_id} was not found.")
+
+
+async def _validate_active_client_exists(
+    session: AsyncSession,
+    client_id: int | None,
+) -> None:
+    if client_id is None:
+        return
+
+    result = await session.execute(
+        select(Client).where(Client.id == client_id)
+    )
+    client = result.scalar_one_or_none()
+
+    if client is None:
+        raise ValueError(f"Client with id {client_id} was not found.")
+
+    if not client.is_active:
+        raise ValueError(f"Client with id {client_id} is inactive.")
+
+
+async def _validate_user_references(
+    session: AsyncSession,
+    role: str,
+    client_id: int | None,
+    department_id: int | None,
+) -> None:
+    if role in {"operator", "client"} and department_id is None:
+        raise ValueError(f"{role} role requires department_id.")
+
+    await _validate_active_client_exists(session=session, client_id=client_id)
+    await _validate_department_exists(session=session, department_id=department_id)
 
 
 async def authenticate_user(
@@ -76,8 +122,12 @@ async def create_user(
         raise ValueError(f"User '{username}' already exists.")
 
     role = validate_role(payload.role)
-    if role == "client" and payload.client_id is None:
-        raise ValueError("client role requires client_id.")
+    await _validate_user_references(
+        session=session,
+        role=role,
+        client_id=payload.client_id,
+        department_id=payload.department_id,
+    )
 
     user = User(
         username=username,
@@ -94,6 +144,7 @@ async def create_user(
 
 
 async def update_user(
+    session: AsyncSession,
     user: User,
     payload: UserUpdate,
 ) -> User:
@@ -114,8 +165,12 @@ async def update_user(
     if "is_active" in updated_fields and payload.is_active is not None:
         user.is_active = payload.is_active
 
-    if user.role == "client" and user.client_id is None:
-        raise ValueError("client role requires client_id.")
+    await _validate_user_references(
+        session=session,
+        role=user.role,
+        client_id=user.client_id,
+        department_id=user.department_id,
+    )
 
     return user
 

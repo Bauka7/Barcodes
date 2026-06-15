@@ -106,7 +106,7 @@ async def update_user_endpoint(
                     detail=f"User with id {user_id} was not found.",
                 )
 
-            await update_user(user=user, payload=payload)
+            await update_user(session=session, user=user, payload=payload)
             await session.flush()
             await session.refresh(user)
             await create_audit_log(

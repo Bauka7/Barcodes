@@ -16,7 +16,6 @@ import RangesPage from './pages/RangesPage';
 import RangeRequestsPage from './pages/RangeRequestsPage';
 import MyRangesPage from './pages/MyRangesPage';
 import CodesPage from './pages/CodesPage';
-import ClientsPage from './pages/ClientsPage';
 import UsersPage from './pages/UsersPage';
 import AuditPage from './pages/AuditPage';
 import SettingsPage from './pages/SettingsPage';
@@ -69,7 +68,6 @@ export default function App() {
         <Route path="/departments" element={gated(STAFF, <DepartmentsPage />)} />
         <Route path="/ranges" element={gated(STAFF, <RangesPage />)} />
         <Route path="/codes" element={gated(STAFF, <CodesPage />)} />
-        <Route path="/clients" element={gated(STAFF, <ClientsPage />)} />
 
         {/* admin */}
         <Route path="/users" element={gated(ADMIN, <UsersPage />)} />

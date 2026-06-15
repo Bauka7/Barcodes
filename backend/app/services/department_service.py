@@ -19,9 +19,15 @@ async def list_departments(
     search: str | None = None,
     limit: int = 100,
     offset: int = 0,
+    department_ids: list[int] | None = None,
 ) -> list[Department]:
     validated_limit, validated_offset = _validate_pagination(limit, offset)
     statement = select(Department).order_by(Department.parent_id, Department.name)
+
+    if department_ids is not None:
+        if not department_ids:
+            return []
+        statement = statement.where(Department.id.in_(department_ids))
 
     normalized_search = (search or "").strip()
     if normalized_search:
@@ -40,8 +46,16 @@ async def list_departments(
     return list(result.scalars().all())
 
 
-async def get_departments_tree(session: AsyncSession) -> list[dict[str, object]]:
+async def get_departments_tree(
+    session: AsyncSession,
+    department_ids: list[int] | None = None,
+) -> list[dict[str, object]]:
     statement = select(Department).order_by(Department.parent_id, Department.name)
+    if department_ids is not None:
+        if not department_ids:
+            return []
+        statement = statement.where(Department.id.in_(department_ids))
+
     result = await session.execute(statement)
     departments = list(result.scalars().all())
 

@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any
 
 from fastapi import Request
@@ -6,6 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AuditLog, User
+
+logger = logging.getLogger(__name__)
 
 
 def _request_ip_address(request: Request | None) -> str | None:
@@ -76,6 +79,33 @@ async def log_user_action(
     )
     await session.commit()
     return audit_log
+
+
+async def safe_log_user_action(
+    session: AsyncSession,
+    action: str,
+    user: User | None = None,
+    username: str | None = None,
+    request: Request | None = None,
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> AuditLog | None:
+    try:
+        return await log_user_action(
+            session=session,
+            action=action,
+            user=user,
+            username=username,
+            request=request,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            details=details,
+        )
+    except Exception:
+        await session.rollback()
+        logger.exception("Audit log failed for action '%s'.", action)
+        return None
 
 
 def _validate_audit_pagination(limit: int, offset: int) -> tuple[int, int]:

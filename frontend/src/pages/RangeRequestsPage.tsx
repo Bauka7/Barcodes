@@ -8,7 +8,6 @@ import {
   listRangeRequests,
   rejectRangeRequest,
 } from '../api/rangeRequests';
-import { listClients } from '../api/clients';
 import { listBarcodeCodes } from '../api/barcodeCodes';
 import type { RangeRequestRead } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
@@ -29,17 +28,6 @@ export default function RangeRequestsPage() {
   const { data: tree } = useDepartmentTree();
   const depts = useMemo(() => flattenDepartments(tree ?? []), [tree]);
 
-  const clientsQ = useQuery({
-    queryKey: ['clients'],
-    queryFn: () => listClients({ limit: 100 }),
-    enabled: isStaff,
-  });
-  const clientName = useMemo(() => {
-    const m = new Map<number, string>();
-    for (const c of clientsQ.data ?? []) m.set(c.id, c.name);
-    return m;
-  }, [clientsQ.data]);
-
   // Справочник кодов для одобрения (только сотрудники).
   const codesQ = useQuery({
     queryKey: ['barcode-codes'],
@@ -57,7 +45,6 @@ export default function RangeRequestsPage() {
   const [purpose, setPurpose] = useState('');
   const [quantity, setQuantity] = useState('100');
   const [requestedCode, setRequestedCode] = useState('');
-  const [clientId, setClientId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -65,7 +52,6 @@ export default function RangeRequestsPage() {
     setPurpose('');
     setQuantity('100');
     setRequestedCode('');
-    setClientId('');
     setDepartmentId('');
     setNotes('');
   };
@@ -78,7 +64,6 @@ export default function RangeRequestsPage() {
         department_id: Number(departmentId),
         requested_code: requestedCode.trim() ? requestedCode.trim().toUpperCase() : undefined,
         request_type: 'issue_range',
-        client_id: isStaff && clientId ? Number(clientId) : undefined,
         notes: notes.trim() || undefined,
       }),
     onSuccess: () => {
@@ -153,11 +138,6 @@ export default function RangeRequestsPage() {
       key: 'department',
       header: t('requests.department'),
       render: (r) => deptName(r.department_id),
-    },
-    {
-      key: 'client',
-      header: t('requests.client'),
-      render: (r) => (r.client_id ? (clientName.get(r.client_id) ?? `#${r.client_id}`) : '—'),
     },
     {
       key: 'status',
@@ -262,18 +242,6 @@ export default function RangeRequestsPage() {
             placeholder={t('requests.requestedCodePh')}
           />
         </Field>
-        {isStaff && (
-          <Field label={t('requests.client')}>
-            <Select value={clientId} onChange={(e) => setClientId(e.target.value)}>
-              <option value="">—</option>
-              {(clientsQ.data ?? []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
         <Field label={t('gen.notes')}>
           <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>

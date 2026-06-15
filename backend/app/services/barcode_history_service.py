@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,6 +45,7 @@ async def create_generation_history(
     session.add(batch)
     await session.flush()
 
+    now = datetime.now(timezone.utc)
     for barcode, sequence_number in zip(barcodes, sequence_numbers, strict=True):
         session.add(
             GeneratedBarcode(
@@ -52,6 +55,9 @@ async def create_generation_history(
                 department_id=department_id,
                 range_id=range_id,
                 sequence_number=sequence_number,
+                status="generated",
+                generated_by=generated_by,
+                generated_at=now,
             )
         )
 
@@ -75,6 +81,7 @@ async def list_batches(
     offset: int = 0,
     package_type: str | None = None,
     department_id: int | None = None,
+    department_ids: list[int] | None = None,
 ) -> list[GeneratedBatch]:
     validated_limit, validated_offset = _validate_history_pagination(limit, offset)
     statement = select(GeneratedBatch).order_by(GeneratedBatch.generated_at.desc())
@@ -85,6 +92,11 @@ async def list_batches(
 
     if department_id is not None:
         statement = statement.where(GeneratedBatch.department_id == department_id)
+
+    if department_ids is not None:
+        if not department_ids:
+            return []
+        statement = statement.where(GeneratedBatch.department_id.in_(department_ids))
 
     statement = statement.limit(validated_limit).offset(validated_offset)
     result = await session.execute(statement)
@@ -110,6 +122,37 @@ async def list_batches_for_client(
     )
     result = await session.execute(statement)
     return list(result.scalars().all())
+
+
+async def list_batches_for_departments(
+    session: AsyncSession,
+    department_ids: list[int],
+    limit: int = 20,
+    offset: int = 0,
+) -> list[GeneratedBatch]:
+    return await list_batches(
+        session=session,
+        limit=limit,
+        offset=offset,
+        department_ids=department_ids,
+    )
+
+
+async def batch_belongs_to_departments(
+    session: AsyncSession,
+    batch_id: int,
+    department_ids: list[int],
+) -> bool:
+    if not department_ids:
+        return False
+
+    statement = (
+        select(GeneratedBatch.id)
+        .where(GeneratedBatch.id == batch_id)
+        .where(GeneratedBatch.department_id.in_(department_ids))
+    )
+    result = await session.execute(statement)
+    return result.scalar_one_or_none() is not None
 
 
 async def batch_belongs_to_client(
