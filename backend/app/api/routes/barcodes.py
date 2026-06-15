@@ -5,11 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db_session
 from app.models import GeneratedBarcode, GeneratedBatch, PrintedBatch, User
 from app.schemas import (
-    BarcodeCancelRequest,
     BarcodeDepartmentInfo,
     BarcodeDetailResponse,
     BarcodeLifecycleListResponse,
-    BarcodeMarkUsedRequest,
     BarcodeNumberRequest,
     BarcodeNumberResponse,
     BarcodeRangeInfo,
@@ -21,24 +19,22 @@ from app.schemas import (
     PrintBatchRequest,
 )
 from app.services.barcode_history_service import (
-    batch_belongs_to_client,
+    batch_belongs_to_departments,
     get_batch_detail,
     list_batches,
-    list_batches_for_client,
+    list_batches_for_departments,
     search_barcode,
 )
 from app.services.barcode_number_service import (
     CounterNotFoundError,
     generate_barcode_numbers_with_history,
 )
-from app.services.audit_service import create_audit_log, log_user_action
+from app.services.audit_service import safe_log_user_action
 from app.services.auth_service import require_roles
 from app.services.barcode_lifecycle_service import (
     GeneratedBarcodeNotFoundError,
-    cancel_barcode,
     get_barcode_detail,
     list_barcodes_by_lifecycle,
-    mark_barcode_used,
 )
 from app.services.pdf_label_service import (
     GeneratedBatchNotFoundError,
@@ -47,7 +43,11 @@ from app.services.pdf_label_service import (
 )
 from app.services.print_tracking_service import (
     list_print_history,
-    list_print_history_for_client,
+)
+from app.services.department_scope_service import (
+    DepartmentScopeError,
+    can_access_department,
+    get_user_department_scope_ids,
 )
 
 router = APIRouter(prefix="/barcodes", tags=["barcodes"])
@@ -60,6 +60,24 @@ async def create_barcode_numbers(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator")),
 ) -> BarcodeNumberResponse:
+    if payload.department_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="department_id is required.",
+        )
+
+    if not await _department_is_visible(
+        session=session,
+        department_id=payload.department_id,
+        current_user=current_user,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions for this department.",
+        )
+
+    await session.rollback()
+
     try:
         result = await generate_barcode_numbers_with_history(
             session=session,
@@ -85,7 +103,7 @@ async def create_barcode_numbers(
             detail="Generated barcode already exists. The transaction was rolled back.",
         ) from error
 
-    await log_user_action(
+    await safe_log_user_action(
         session=session,
         action="barcode_generated",
         user=current_user,
@@ -138,6 +156,8 @@ def _barcode_to_schema(barcode: GeneratedBarcode) -> GeneratedBarcodeItem:
         sequence_number=barcode.sequence_number,
         printed=barcode.printed,
         printed_at=barcode.printed_at,
+        generated_by=barcode.generated_by,
+        printed_by=barcode.printed_by,
         status=barcode.status,
         cancelled_at=barcode.cancelled_at,
         cancelled_by=barcode.cancelled_by,
@@ -176,6 +196,53 @@ def _pdf_response(
     )
 
 
+async def _get_scope_ids_or_400(
+    session: AsyncSession,
+    current_user: User,
+) -> list[int] | None:
+    try:
+        return await get_user_department_scope_ids(session=session, user=current_user)
+    except DepartmentScopeError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+
+async def _batch_is_visible(
+    session: AsyncSession,
+    batch_id: int,
+    current_user: User,
+) -> bool:
+    scope_ids = await _get_scope_ids_or_400(session=session, current_user=current_user)
+    if scope_ids is None:
+        return True
+
+    return await batch_belongs_to_departments(
+        session=session,
+        batch_id=batch_id,
+        department_ids=scope_ids,
+    )
+
+
+async def _department_is_visible(
+    session: AsyncSession,
+    department_id: int | None,
+    current_user: User,
+) -> bool:
+    try:
+        return await can_access_department(
+            session=session,
+            user=current_user,
+            department_id=department_id,
+        )
+    except DepartmentScopeError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+
 @router.get(
     "/lifecycle",
     response_model=BarcodeLifecycleListResponse,
@@ -192,11 +259,25 @@ async def get_barcode_lifecycle_items(
     current_user: User = Depends(require_roles("admin", "operator")),
 ) -> BarcodeLifecycleListResponse:
     try:
+        department_ids = await _get_scope_ids_or_400(
+            session=session,
+            current_user=current_user,
+        )
+        if department_id is not None and not await _department_is_visible(
+            session=session,
+            department_id=department_id,
+            current_user=current_user,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions for this department.",
+            )
         barcodes = await list_barcodes_by_lifecycle(
             session=session,
             status=status_filter,
             package_type=package_type,
             department_id=department_id,
+            department_ids=department_ids,
             printed=printed,
             limit=limit,
             offset=offset,
@@ -268,7 +349,17 @@ async def get_barcode_detail_endpoint(
             detail=str(error),
         ) from error
 
-    await log_user_action(
+    if not await _department_is_visible(
+        session=session,
+        department_id=barcode_record.department_id,
+        current_user=current_user,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Generated barcode '{barcode}' was not found.",
+        )
+
+    await safe_log_user_action(
         session=session,
         action="barcode_detail_viewed",
         user=current_user,
@@ -286,98 +377,6 @@ async def get_barcode_detail_endpoint(
     )
 
 
-@router.post(
-    "/{barcode}/cancel",
-    response_model=GeneratedBarcodeItem,
-    status_code=status.HTTP_200_OK,
-)
-async def cancel_barcode_endpoint(
-    barcode: str,
-    payload: BarcodeCancelRequest,
-    request: Request,
-    session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(require_roles("admin", "operator")),
-) -> GeneratedBarcodeItem:
-    try:
-        async with session.begin():
-            barcode_record = await cancel_barcode(
-                session=session,
-                barcode=barcode,
-                current_user=current_user,
-                reason=payload.reason,
-            )
-            await create_audit_log(
-                session=session,
-                action="barcode_cancelled",
-                user=current_user,
-                request=request,
-                entity_type="generated_barcode",
-                entity_id=str(barcode_record.id),
-                details={
-                    "barcode": barcode_record.barcode,
-                    "reason": payload.reason,
-                },
-            )
-    except GeneratedBarcodeNotFoundError as error:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(error),
-        ) from error
-    except ValueError as error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
-        ) from error
-
-    return _barcode_to_schema(barcode_record)
-
-
-@router.post(
-    "/{barcode}/mark-used",
-    response_model=GeneratedBarcodeItem,
-    status_code=status.HTTP_200_OK,
-)
-async def mark_barcode_used_endpoint(
-    barcode: str,
-    payload: BarcodeMarkUsedRequest,
-    request: Request,
-    session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(require_roles("admin", "operator")),
-) -> GeneratedBarcodeItem:
-    try:
-        async with session.begin():
-            barcode_record = await mark_barcode_used(
-                session=session,
-                barcode=barcode,
-                current_user=current_user,
-                notes=payload.notes,
-            )
-            await create_audit_log(
-                session=session,
-                action="barcode_marked_used",
-                user=current_user,
-                request=request,
-                entity_type="generated_barcode",
-                entity_id=str(barcode_record.id),
-                details={
-                    "barcode": barcode_record.barcode,
-                    "notes": payload.notes,
-                },
-            )
-    except GeneratedBarcodeNotFoundError as error:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(error),
-        ) from error
-    except ValueError as error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
-        ) from error
-
-    return _barcode_to_schema(barcode_record)
-
-
 @router.get(
     "/history/batches",
     response_model=list[GeneratedBatchItem],
@@ -392,12 +391,26 @@ async def get_generation_batches(
     current_user: User = Depends(require_roles("admin", "operator")),
 ) -> list[GeneratedBatchItem]:
     try:
+        department_ids = await _get_scope_ids_or_400(
+            session=session,
+            current_user=current_user,
+        )
+        if department_id is not None and not await _department_is_visible(
+            session=session,
+            department_id=department_id,
+            current_user=current_user,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions for this department.",
+            )
         batches = await list_batches(
             session=session,
             limit=limit,
             offset=offset,
             package_type=package_type,
             department_id=department_id,
+            department_ids=department_ids,
         )
     except ValueError as error:
         raise HTTPException(
@@ -427,6 +440,16 @@ async def get_generation_batch_detail(
         )
 
     batch, barcodes = result
+    if not await _batch_is_visible(
+        session=session,
+        batch_id=batch.id,
+        current_user=current_user,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Generated batch with id {batch_id} was not found.",
+        )
+
     batch_item = _batch_to_schema(batch)
     return GeneratedBatchDetail(
         **batch_item.model_dump(),
@@ -453,6 +476,16 @@ async def search_generated_barcode(
         )
 
     generated_barcode, batch = result
+    if not await _department_is_visible(
+        session=session,
+        department_id=generated_barcode.department_id,
+        current_user=current_user,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Generated barcode '{barcode}' was not found.",
+        )
+
     barcode_item = _barcode_to_schema(generated_barcode)
     return GeneratedBarcodeSearchResponse(
         **barcode_item.model_dump(),
@@ -471,16 +504,24 @@ async def get_my_batches(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> list[GeneratedBatchItem]:
-    if current_user.client_id is None:
+    scope_ids = await _get_scope_ids_or_400(session=session, current_user=current_user)
+    if scope_ids is not None and not scope_ids:
         return []
 
     try:
-        batches = await list_batches_for_client(
-            session=session,
-            client_id=current_user.client_id,
-            limit=limit,
-            offset=offset,
-        )
+        if scope_ids is None:
+            batches = await list_batches(
+                session=session,
+                limit=limit,
+                offset=offset,
+            )
+        else:
+            batches = await list_batches_for_departments(
+                session=session,
+                department_ids=scope_ids,
+                limit=limit,
+                offset=offset,
+            )
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -500,10 +541,10 @@ async def get_my_batch_detail(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> GeneratedBatchDetail:
-    if current_user.client_id is None or not await batch_belongs_to_client(
+    if not await _batch_is_visible(
         session=session,
         batch_id=batch_id,
-        client_id=current_user.client_id,
+        current_user=current_user,
     ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -536,15 +577,16 @@ async def get_my_print_history(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> list[PrintedBatchItem]:
-    if current_user.client_id is None:
+    scope_ids = await _get_scope_ids_or_400(session=session, current_user=current_user)
+    if scope_ids is not None and not scope_ids:
         return []
 
     try:
-        printed_batches = await list_print_history_for_client(
+        printed_batches = await list_print_history(
             session=session,
-            client_id=current_user.client_id,
             limit=limit,
             offset=offset,
+            department_ids=scope_ids,
         )
     except ValueError as error:
         raise HTTPException(
@@ -567,17 +609,14 @@ async def preview_batch_pdf(
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> Response:
     # Клиент может смотреть PDF только своих партий (партий своей организации).
-    if current_user.role == "client" and (
-        current_user.client_id is None
-        or not await batch_belongs_to_client(
-            session=session,
-            batch_id=batch_id,
-            client_id=current_user.client_id,
-        )
+    if not await _batch_is_visible(
+        session=session,
+        batch_id=batch_id,
+        current_user=current_user,
     ):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Generated batch with id {batch_id} was not found.",
         )
 
     try:
@@ -596,7 +635,7 @@ async def preview_batch_pdf(
             detail=str(error),
         ) from error
 
-    await log_user_action(
+    await safe_log_user_action(
         session=session,
         action="pdf_preview_generated",
         user=current_user,
@@ -624,21 +663,17 @@ async def print_batch_pdf(
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> Response:
     # Клиент может печатать только свои партии (партий своей организации).
-    if current_user.role == "client" and (
-        current_user.client_id is None
-        or not await batch_belongs_to_client(
-            session=session,
-            batch_id=batch_id,
-            client_id=current_user.client_id,
-        )
+    if not await _batch_is_visible(
+        session=session,
+        batch_id=batch_id,
+        current_user=current_user,
     ):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Generated batch with id {batch_id} was not found.",
         )
 
-    if current_user.role == "client":
-        await session.rollback()
+    await session.rollback()
 
     try:
         pdf_bytes = await generate_batch_pdf_and_track_print(
@@ -659,7 +694,7 @@ async def print_batch_pdf(
             detail=str(error),
         ) from error
 
-    await log_user_action(
+    await safe_log_user_action(
         session=session,
         action="client_pdf_downloaded" if current_user.role == "client" else "batch_printed",
         user=current_user,
@@ -689,11 +724,25 @@ async def get_print_history(
     current_user: User = Depends(require_roles("admin", "operator")),
 ) -> list[PrintedBatchItem]:
     try:
+        department_ids = await _get_scope_ids_or_400(
+            session=session,
+            current_user=current_user,
+        )
+        if department_id is not None and not await _department_is_visible(
+            session=session,
+            department_id=department_id,
+            current_user=current_user,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not enough permissions for this department.",
+            )
         printed_batches = await list_print_history(
             session=session,
             limit=limit,
             offset=offset,
             department_id=department_id,
+            department_ids=department_ids,
             generated_batch_id=generated_batch_id,
         )
     except ValueError as error:

@@ -5,11 +5,15 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import BarcodeRange, RangeRequest, User
+from app.models import BarcodeRange, Client, Department, RangeRequest, User
 from app.schemas import RangeRequestCreate
 from app.services.barcode_code_service import ensure_code_allocatable
 from app.services.barcode_number_service import MAX_COUNTER_VALUE, validate_package_type
 from app.services.barcode_range_service import create_barcode_range_from_request
+from app.services.department_scope_service import (
+    can_access_department,
+    get_user_department_scope_ids,
+)
 
 RANGE_REQUEST_STATUSES = {"pending", "approved", "rejected", "cancelled"}
 
@@ -53,6 +57,31 @@ def validate_requested_quantity(requested_quantity: int) -> int:
     return requested_quantity
 
 
+async def _validate_department_exists(
+    session: AsyncSession,
+    department_id: int,
+) -> None:
+    result = await session.execute(
+        select(Department.id).where(Department.id == department_id)
+    )
+    if result.scalar_one_or_none() is None:
+        raise ValueError(f"Department with id {department_id} was not found.")
+
+
+async def _validate_active_client_exists(
+    session: AsyncSession,
+    client_id: int,
+) -> None:
+    result = await session.execute(select(Client).where(Client.id == client_id))
+    client = result.scalar_one_or_none()
+
+    if client is None:
+        raise ValueError(f"Client with id {client_id} was not found.")
+
+    if not client.is_active:
+        raise ValueError(f"Client with id {client_id} is inactive.")
+
+
 async def create_range_request(
     session: AsyncSession,
     payload: RangeRequestCreate,
@@ -64,8 +93,25 @@ async def create_range_request(
 
     requested_quantity = validate_requested_quantity(payload.requested_quantity)
 
-    if payload.department_id is None:
+    department_id = payload.department_id
+    if requester.role == "client":
+        if requester.department_id is None:
+            raise ValueError("client account is not linked to a department.")
+        department_id = requester.department_id
+
+    if department_id is None:
         raise ValueError("department_id is required.")
+
+    await _validate_department_exists(
+        session=session,
+        department_id=department_id,
+    )
+    if not await can_access_department(
+        session=session,
+        user=requester,
+        department_id=department_id,
+    ):
+        raise ValueError("Not enough permissions for this department.")
 
     if not payload.request_type.strip():
         raise ValueError("request_type is required.")
@@ -79,19 +125,15 @@ async def create_range_request(
         validate_package_type(payload.requested_code) if payload.requested_code else None
     )
 
-    # Владение жёстко привязываем к организации клиента; клиент не может
-    # подставить чужой client_id. Сотрудник указывает client_id явно.
-    if requester.role == "client":
-        if requester.client_id is None:
-            raise ValueError("client account is not linked to an organization.")
-        client_id = requester.client_id
-    else:
-        client_id = payload.client_id
+    client_id = payload.client_id
+
+    if client_id is not None:
+        await _validate_active_client_exists(session=session, client_id=client_id)
 
     range_request = RangeRequest(
         requester_id=requester.id,
         client_id=client_id,
-        department_id=payload.department_id,
+        department_id=department_id,
         package_type=package_type,
         requested_quantity=requested_quantity,
         request_type=payload.request_type.strip(),
@@ -114,6 +156,18 @@ async def get_range_request_by_id(
     return result.scalar_one_or_none()
 
 
+async def get_range_request_by_id_for_update(
+    session: AsyncSession,
+    request_id: int,
+) -> RangeRequest | None:
+    result = await session.execute(
+        select(RangeRequest)
+        .where(RangeRequest.id == request_id)
+        .with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
 async def list_range_requests(
     session: AsyncSession,
     current_user: User,
@@ -127,12 +181,11 @@ async def list_range_requests(
     validated_limit, validated_offset = _validate_pagination(limit, offset)
     statement = select(RangeRequest).order_by(RangeRequest.created_at.desc())
 
-    if current_user.role == "client":
-        # Клиент видит заявки всей своей организации, а не только свои.
-        if current_user.client_id is None:
+    scope_ids = await get_user_department_scope_ids(session=session, user=current_user)
+    if scope_ids is not None:
+        if not scope_ids:
             return []
-        statement = statement.where(RangeRequest.client_id == current_user.client_id)
-
+        statement = statement.where(RangeRequest.department_id.in_(scope_ids))
     if status:
         normalized_status = status.strip().lower()
         if normalized_status not in RANGE_REQUEST_STATUSES:
@@ -153,14 +206,15 @@ async def list_range_requests(
     return list(result.scalars().all())
 
 
-def can_view_range_request(current_user: User, range_request: RangeRequest) -> bool:
-    if current_user.role in {"admin", "operator"}:
-        return True
-
-    return (
-        current_user.role == "client"
-        and current_user.client_id is not None
-        and range_request.client_id == current_user.client_id
+async def can_access_range_request(
+    session: AsyncSession,
+    current_user: User,
+    range_request: RangeRequest,
+) -> bool:
+    return await can_access_department(
+        session=session,
+        user=current_user,
+        department_id=range_request.department_id,
     )
 
 
@@ -175,11 +229,18 @@ async def approve_range_request(
     if range_request.status != "pending":
         raise ValueError("Only pending range requests can be approved.")
 
-    # Код назначает модератор. Если не передан — используем код из заявки
-    # (legacy issue_range), иначе одобрить нельзя.
-    code = approved_code or range_request.package_type
+    # Staff must choose the real code during approval.
+    code = (approved_code or "").strip()
     if not code:
         raise ValueError("approved_code is required to approve this request.")
+
+    existing_range_result = await session.execute(
+        select(BarcodeRange.id)
+        .where(BarcodeRange.request_id == range_request.id)
+        .limit(1)
+    )
+    if existing_range_result.scalar_one_or_none() is not None:
+        raise ValueError("This range request already has an allocated barcode range.")
 
     # Проверяем код по справочнику и помечаем активным (available -> active).
     code = await ensure_code_allocatable(session=session, code=code)

@@ -20,8 +20,7 @@ class RangeRequestCreate(BaseModel):
 
 class RangeRequestDecision(BaseModel):
     # approved_code используется при одобрении (модератор назначает код).
-    # expires_at — необязательный срок действия выдаваемого диапазона.
-    # reject/cancel оба поля игнорируют.
+    # expires_at is accepted for backward compatibility but ignored in the MVP flow.
     approved_code: str | None = None
     expires_at: datetime | None = None
     notes: str | None = None

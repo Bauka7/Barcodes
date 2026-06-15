@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from pydantic import BaseModel
 
 
@@ -10,11 +8,6 @@ class RangeGenerateRequest(BaseModel):
 
 class RangeCancelRequest(BaseModel):
     reason: str
-
-
-class RangeRenewRequest(BaseModel):
-    # Новый срок действия диапазона (должен быть в будущем).
-    expires_at: datetime
 
 
 class RangeRemainingResponse(BaseModel):

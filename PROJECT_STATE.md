@@ -18,7 +18,7 @@ The backend currently supports:
 - JWT authentication.
 - Roles: `admin`, `operator`, `client`.
 - Audit logging for important user actions.
-- Clients, range requests, and barcode range allocation foundation.
+- Legacy clients API, range requests, and barcode range allocation foundation.
 - SHPI generation from allocated barcode ranges.
 - Individual barcode lifecycle tracking.
 
@@ -173,6 +173,8 @@ Fields:
 - `sequence_number`
 - `printed`
 - `printed_at`
+- `generated_by`
+- `printed_by`
 - `status`
 - `cancelled_at`
 - `cancelled_by`
@@ -188,8 +190,12 @@ Lifecycle statuses:
 
 - `generated`
 - `printed`
-- `used`
-- `cancelled`
+
+MVP note:
+
+- active business flow uses only `generated -> printed`;
+- old `used`/`cancelled` fields remain in the table for compatibility and old data;
+- cancel/mark-used behavior is disabled in the active API and frontend.
 
 ### PrintedBatch
 
@@ -277,6 +283,10 @@ Fields:
 - `package_type`
 - `requested_quantity`
 - `request_type`
+- `purpose`
+- `requested_code`
+- `approved_code`
+- `decision_notes`
 - `payload`
 - `status`
 - `handled_by`
@@ -320,8 +330,12 @@ Statuses:
 
 - `active`
 - `exhausted`
-- `expired`
 - `cancelled`
+
+Legacy/future note:
+
+- `expired` may exist in old rows because the database still allows it.
+- The MVP backend no longer auto-creates `expired` ranges and does not expose renewal.
 
 ## Implemented Endpoints
 
@@ -381,6 +395,8 @@ Query params:
 
 ### Clients
 
+Legacy compatibility only in the MVP. Clients are hidden from the active frontend and are not the active ownership model.
+
 Admin/operator can read. Admin can create/update.
 
 ```http
@@ -392,7 +408,7 @@ PATCH /api/clients/{client_id}
 
 ### Range Requests
 
-Admin/operator can create, read, approve, reject, and cancel. Client can create and read own requests only.
+Admin can access all requests. Operators can access requests in their own department subtree. Client-role users can create/read own-department requests only.
 
 ```http
 POST /api/range-requests
@@ -478,17 +494,20 @@ Returns the generated barcode record plus batch info.
 
 ```http
 GET /api/barcodes/{barcode}/detail
-POST /api/barcodes/{barcode}/cancel
-POST /api/barcodes/{barcode}/mark-used
 GET /api/barcodes/lifecycle
 ```
 
 Permissions:
 
 - detail: any authenticated active user;
-- lifecycle list: `admin`, `operator`;
-- cancel: `admin`, `operator`;
-- mark used: `admin`, `operator`.
+- lifecycle list: `admin`, `operator`.
+
+Disabled for MVP:
+
+- `POST /api/barcodes/{barcode}/cancel`
+- `POST /api/barcodes/{barcode}/mark-used`
+
+These actions are not exposed in the active OpenAPI/frontend. Old database columns remain for compatibility.
 
 Lifecycle query params:
 
@@ -535,7 +554,8 @@ Also:
 
 - creates one `PrintedBatch`;
 - marks all `GeneratedBarcode` rows for the batch as printed;
-- sets `printed_at`.
+- sets `printed_at` and `printed_by`;
+- only `generated` or already `printed` barcode rows can be printed.
 
 ```http
 GET /api/barcodes/print-history
@@ -744,8 +764,6 @@ Audit actions currently logged:
 - `range_generation_started`
 - `range_generation_completed`
 - `range_exhausted`
-- `barcode_cancelled`
-- `barcode_marked_used`
 - `barcode_detail_viewed`
 
 ## Barcode Lifecycle
@@ -755,12 +773,12 @@ Each `GeneratedBarcode` is now an individual lifecycle entity.
 Lifecycle rules:
 
 - new barcodes are created with status `generated`;
+- generation stores `generated_by`, `generated_at`, `department_id`, `batch_id`, and optional `range_id`;
 - printing moves `generated` barcodes to `printed`;
-- printing does not overwrite `used` or `cancelled`;
-- only `generated` or `printed` barcodes can be cancelled;
-- used barcodes cannot be cancelled;
-- only `generated` or `printed` barcodes can be marked used;
-- cancelled barcodes cannot be marked used.
+- printing stores `printed_by` and `printed_at`;
+- already `printed` barcodes remain `printed`;
+- active MVP statuses are only `generated` and `printed`;
+- old `used`/`cancelled` columns and old rows remain for compatibility, but no active route/UI creates them.
 
 Detailed lookup returns:
 
@@ -769,7 +787,7 @@ Detailed lookup returns:
 - range info when `range_id` exists;
 - department info when `department_id` exists;
 - print status;
-- lifecycle status and timestamps/users/reasons.
+- lifecycle status and generation/print timestamps/users.
 
 ## Range Allocation Foundation
 
@@ -790,7 +808,6 @@ Approval behavior:
 Range generation behavior:
 
 - request body is `{"quantity": 10, "notes": "optional"}`;
-- allowed roles are `admin` and `operator`;
 - range must be `active`;
 - range row is locked with `SELECT FOR UPDATE`;
 - serial numbers are consumed sequentially from `BarcodeRange.current_number`;
@@ -799,6 +816,9 @@ Range generation behavior:
 - `GeneratedBatch.range_id` and `GeneratedBarcode.range_id` point to the source range;
 - if any barcode insert fails, `current_number` and status changes roll back;
 - when the final serial is consumed, range status becomes `exhausted`.
+- MVP range lifecycle is `active -> exhausted` or `active -> cancelled`.
+- Expiry/renewal fields remain in the database but are disabled in the current backend workflow.
+- Unused numbers from cancelled ranges are not reused because allocation is forward-only.
 
 Remaining endpoint:
 
@@ -852,6 +872,11 @@ When adding models, register them in `app/models/__init__.py` so Alembic can see
 ## Important Business Rules
 
 - SHPI generation must be concurrency-safe.
+- MVP frontend is department-centric: client-company management screens are hidden.
+- MVP ownership is department-based.
+- Admin can access all departments.
+- Operator access is limited to the operator department and descendants.
+- Client-role access is limited to the user's own department.
 - Never generate barcode numbers without locking the package counter row.
 - Never update counters separately from history rows for API generation.
 - Keep generation, batch history, and barcode history atomic.
@@ -859,6 +884,12 @@ When adding models, register them in `app/models/__init__.py` so Alembic can see
 - Legacy options import is the exception: it intentionally overwrites counters and `obl_code`.
 - Package type validation should rely on the `barcode_counters` table, not a small hardcoded list.
 - Missing counter row should return a clear error.
+- MVP UI is department-centric and hides client-company management.
+- Staff-created range requests may be department-only with `client_id = null`.
+- If legacy `client_id` is provided, it must reference an active client.
+- Client-role requests use `current_user.department_id`; request payload cannot assign another department.
+- Range approval must include explicit `approved_code`; approval no longer falls back to `package_type`.
+- Barcode detail, PDF, print history, generated batches, and lifecycle access are scoped by `department_id`.
 - Invalid input should return HTTP 400.
 - Missing batch/history rows should return HTTP 404.
 - Do not add frontend until explicitly requested.
@@ -874,7 +905,7 @@ Likely future work:
 - Add barcode image generation if required by frontend.
 - Add print reprint rules and print status workflow.
 - Add filtering/report endpoints for generated SHPI accounting.
-- Add range exhaustion and expiration handling.
+- Revisit range expiry/renewal only if business defines a reuse policy for unused numbers.
 - Add CSV/Excel export for reports.
 - Add CRUD/admin endpoints for settings and counters.
 - Extend authentication with password changes and finer permissions if requested.

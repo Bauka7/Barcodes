@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +10,7 @@ from app.services.barcode_number_service import (
     DEFAULT_OBL_CODE,
     build_barcode_number,
     get_setting_value,
+    validate_country_suffix,
     validate_quantity,
 )
 
@@ -95,15 +95,6 @@ async def generate_barcodes_from_range(
         if barcode_range is None:
             raise BarcodeRangeNotFoundError(f"Barcode range with id {range_id} was not found.")
 
-        # Защита: истёкший по сроку диапазон генерировать нельзя
-        # (статус будет помечен expired при ближайшем чтении списка).
-        if (
-            barcode_range.status == "active"
-            and barcode_range.expires_at is not None
-            and barcode_range.expires_at < datetime.now(timezone.utc)
-        ):
-            raise ValueError("Range has expired and can no longer generate SHPI.")
-
         if barcode_range.status != "active":
             raise ValueError("Only active barcode ranges can generate SHPI.")
 
@@ -114,7 +105,9 @@ async def generate_barcodes_from_range(
             )
 
         obl_code = await get_setting_value(session, "obl_code", DEFAULT_OBL_CODE)
-        suffix = (await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)).upper()
+        suffix = validate_country_suffix(
+            await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)
+        )
 
         start_number = barcode_range.current_number
         end_number = start_number + validated_quantity - 1

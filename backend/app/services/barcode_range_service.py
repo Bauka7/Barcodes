@@ -9,7 +9,9 @@ from app.services.barcode_number_service import (
     validate_package_type,
 )
 
-BARCODE_RANGE_STATUSES = {"active", "exhausted", "expired", "cancelled"}
+# MVP lifecycle is active -> exhausted or active -> cancelled.
+# Keep "expired" readable for existing rows, but normal flow must not create it.
+BARCODE_RANGE_STATUSES = {"active", "exhausted", "cancelled", "expired"}
 
 
 def _validate_pagination(limit: int, offset: int) -> tuple[int, int]:
@@ -74,6 +76,18 @@ async def get_range_by_id(
     return result.scalar_one_or_none()
 
 
+async def get_range_by_id_for_update(
+    session: AsyncSession,
+    range_id: int,
+) -> BarcodeRange | None:
+    result = await session.execute(
+        select(BarcodeRange)
+        .where(BarcodeRange.id == range_id)
+        .with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
 async def list_ranges(
     session: AsyncSession,
     limit: int = 100,
@@ -82,6 +96,7 @@ async def list_ranges(
     status: str | None = None,
     client_id: int | None = None,
     department_id: int | None = None,
+    department_ids: list[int] | None = None,
 ) -> list[BarcodeRange]:
     validated_limit, validated_offset = _validate_pagination(limit, offset)
     statement = select(BarcodeRange).order_by(BarcodeRange.created_at.desc())
@@ -92,7 +107,9 @@ async def list_ranges(
     if status:
         normalized_status = status.strip().lower()
         if normalized_status not in BARCODE_RANGE_STATUSES:
-            raise ValueError("status must be one of: active, exhausted, expired, cancelled.")
+            raise ValueError(
+                "status must be one of: active, exhausted, cancelled, expired (legacy)."
+            )
         statement = statement.where(BarcodeRange.status == normalized_status)
 
     if client_id is not None:
@@ -101,16 +118,18 @@ async def list_ranges(
     if department_id is not None:
         statement = statement.where(BarcodeRange.issued_to_department_id == department_id)
 
+    if department_ids is not None:
+        if not department_ids:
+            return []
+        statement = statement.where(BarcodeRange.issued_to_department_id.in_(department_ids))
+
     statement = statement.limit(validated_limit).offset(validated_offset)
     result = await session.execute(statement)
     return list(result.scalars().all())
 
 
 async def expire_due_ranges(session: AsyncSession) -> int:
-    """Ленивое истечение: active → expired для диапазонов с прошедшим сроком.
-
-    Вызывается перед выдачей списков/диапазонов. Возвращает число помеченных.
-    """
+    """Legacy helper kept for future use; not called in the MVP request flow."""
 
     now = datetime.now(timezone.utc)
     statement = (
@@ -131,14 +150,20 @@ async def cancel_range(
     cancelled_by_user: User,
     reason: str,
 ) -> BarcodeRange:
-    """Отмена диапазона модератором. Разрешена для active/expired."""
+    """Cancel an active range. Exhausted/cancelled ranges stay immutable."""
 
     normalized_reason = (reason or "").strip()
     if not normalized_reason:
         raise ValueError("reason is required to cancel a range.")
 
-    if barcode_range.status not in {"active", "expired"}:
-        raise ValueError("Only active or expired ranges can be cancelled.")
+    if barcode_range.status == "cancelled":
+        raise ValueError("Range is already cancelled.")
+
+    if barcode_range.status == "exhausted":
+        raise ValueError("Exhausted ranges cannot be cancelled.")
+
+    if barcode_range.status != "active":
+        raise ValueError("Only active ranges can be cancelled.")
 
     barcode_range.status = "cancelled"
     barcode_range.cancellation_reason = normalized_reason

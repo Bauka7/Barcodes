@@ -1,22 +1,19 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { cancelBarcode, listLifecycle, markBarcodeUsed } from '../api/barcodes';
+import { listLifecycle } from '../api/barcodes';
 import type { GeneratedBarcodeItem } from '../api/types';
 import { flattenDepartments, useDepartmentName, useDepartmentTree } from '../lib/departmentName';
 import { DataTable, type Column } from '../components/DataTable';
 import { StatusBadge } from '../components/StatusBadge';
 import { Chip } from '../components/Chip';
 import { Pagination } from '../components/Pagination';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Button, ErrorText, Field, PageHeader, Select } from '../components/ui';
+import { ErrorText, Field, PageHeader, Select } from '../components/ui';
 
 const LIMIT = 20;
-const actionable = (s: string) => s !== 'used' && s !== 'cancelled';
 
 export default function LifecyclePage() {
   const { t } = useTranslation();
-  const qc = useQueryClient();
   const deptName = useDepartmentName();
   const { data: tree } = useDepartmentTree();
   const depts = useMemo(() => flattenDepartments(tree ?? []), [tree]);
@@ -41,55 +38,20 @@ export default function LifecyclePage() {
     queryFn: () => listLifecycle(params),
   });
 
-  const [dialog, setDialog] = useState<{ kind: 'cancel' | 'use'; barcode: string } | null>(null);
-
-  const cancelMut = useMutation({
-    mutationFn: ({ barcode, reason }: { barcode: string; reason: string }) =>
-      cancelBarcode(barcode, reason),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['lifecycle'] });
-      setDialog(null);
-    },
-  });
-  const useMut = useMutation({
-    mutationFn: ({ barcode, notes }: { barcode: string; notes: string }) =>
-      markBarcodeUsed(barcode, notes || undefined),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['lifecycle'] });
-      setDialog(null);
-    },
-  });
-
   const resetOffset = () => setOffset(0);
 
   const columns: Column<GeneratedBarcodeItem>[] = [
     { key: 'barcode', header: t('lifecycle.barcode'), render: (r) => <span className="font-mono">{r.barcode}</span> },
     { key: 'type', header: t('lifecycle.type'), render: (r) => r.package_type },
     { key: 'dept', header: t('lifecycle.dept'), render: (r) => deptName(r.department_id) },
+    { key: 'generatedBy', header: t('lifecycle.generatedBy'), render: (r) => <span className="font-mono">{r.generated_by ?? '—'}</span> },
+    { key: 'printedBy', header: t('lifecycle.printedBy'), render: (r) => <span className="font-mono">{r.printed_by ?? '—'}</span> },
     { key: 'status', header: t('lifecycle.status'), render: (r) => <StatusBadge status={r.status} /> },
     {
       key: 'printed',
       header: t('lifecycle.printed'),
       render: (r) =>
         r.printed ? <StatusBadge status="printed" /> : <Chip tone="muted">{t('common.no')}</Chip>,
-    },
-    {
-      key: 'actions',
-      header: '',
-      align: 'right',
-      render: (r) =>
-        actionable(r.status) ? (
-          <span className="flex justify-end gap-1.5">
-            <Button size="sm" onClick={() => setDialog({ kind: 'use', barcode: r.barcode })}>
-              {t('actions.markUsed')}
-            </Button>
-            <Button size="sm" variant="danger" onClick={() => setDialog({ kind: 'cancel', barcode: r.barcode })}>
-              <i className="ti ti-x" />
-            </Button>
-          </span>
-        ) : (
-          <span className="text-t3">—</span>
-        ),
     },
   ];
 
@@ -109,8 +71,6 @@ export default function LifecyclePage() {
             <option value="">{t('lifecycle.allStatuses')}</option>
             <option value="generated">{t('status.barcode.generated')}</option>
             <option value="printed">{t('status.barcode.printed')}</option>
-            <option value="used">{t('status.barcode.used')}</option>
-            <option value="cancelled">{t('status.barcode.cancelled')}</option>
           </Select>
         </Field>
         <Field label={t('lifecycle.printed')} className="mb-0 w-36">
@@ -174,26 +134,6 @@ export default function LifecyclePage() {
           />
         </>
       )}
-
-      <ConfirmDialog
-        open={dialog?.kind === 'cancel'}
-        title={t('actions.cancelTitle')}
-        danger
-        confirmLabel={t('actions.cancel2')}
-        input={{ label: t('actions.reason'), required: true }}
-        busy={cancelMut.isPending}
-        onConfirm={(reason) => dialog && cancelMut.mutate({ barcode: dialog.barcode, reason })}
-        onCancel={() => setDialog(null)}
-      />
-      <ConfirmDialog
-        open={dialog?.kind === 'use'}
-        title={t('actions.markUsedTitle')}
-        confirmLabel={t('actions.markUsed')}
-        input={{ label: t('actions.notesOptional') }}
-        busy={useMut.isPending}
-        onConfirm={(notes) => dialog && useMut.mutate({ barcode: dialog.barcode, notes })}
-        onCancel={() => setDialog(null)}
-      />
     </div>
   );
 }

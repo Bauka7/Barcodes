@@ -6,6 +6,10 @@ from app.models import User
 from app.schemas import DepartmentItem, DepartmentTreeItem
 from app.services.auth_service import get_current_user
 from app.services.department_service import get_departments_tree, list_departments
+from app.services.department_scope_service import (
+    DepartmentScopeError,
+    get_user_department_scope_ids,
+)
 
 router = APIRouter(prefix="/departments", tags=["departments"])
 
@@ -19,13 +23,18 @@ async def get_departments(
     current_user: User = Depends(get_current_user),
 ) -> list[DepartmentItem]:
     try:
+        department_ids = await get_user_department_scope_ids(
+            session=session,
+            user=current_user,
+        )
         departments = await list_departments(
             session=session,
             search=search,
             limit=limit,
             offset=offset,
+            department_ids=department_ids,
         )
-    except ValueError as error:
+    except (DepartmentScopeError, ValueError) as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
@@ -50,5 +59,19 @@ async def get_department_tree(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(get_current_user),
 ) -> list[DepartmentTreeItem]:
-    items = await get_departments_tree(session=session)
+    try:
+        department_ids = await get_user_department_scope_ids(
+            session=session,
+            user=current_user,
+        )
+        items = await get_departments_tree(
+            session=session,
+            department_ids=department_ids,
+        )
+    except DepartmentScopeError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
     return [DepartmentTreeItem.model_validate(item) for item in items]

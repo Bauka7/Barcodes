@@ -23,7 +23,7 @@ Implemented:
 - Authentication with JWT access tokens.
 - Roles: `admin`, `operator`, `client`.
 - Audit logging for important user actions.
-- Clients, range requests, barcode range allocation, and SHPI generation from allocated ranges.
+- Legacy clients API, range requests, barcode range allocation, and SHPI generation from allocated ranges.
 - Individual barcode lifecycle tracking.
 - Frontend MVP for login, departments, generation, history, search, PDF preview/download, and print history.
 
@@ -145,6 +145,10 @@ python -m app.db.import_departments
 ```
 
 The range workflow also uses the same `barcode_counters` table. Approving a range request reserves numbers by incrementing the package counter. Generating from a range later creates `GeneratedBatch` and `GeneratedBarcode` rows with `source = "range"`.
+
+MVP ownership is department-based. Admin sees all data, operators see their own department subtree, and client-role users see only their own department. `/api/clients` and the `clients` table remain only for legacy compatibility and are hidden from the active frontend flow.
+
+MVP range lifecycle is intentionally simple: `active -> exhausted` or `active -> cancelled`. Expiry and renewal fields remain in the database for future use, but the backend does not auto-expire ranges and does not expose a renew endpoint. Unused numbers from cancelled ranges are not reused because allocation is forward-only.
 
 ## Run Backend
 
@@ -296,23 +300,8 @@ curl "http://127.0.0.1:8000/api/barcodes/lifecycle?status=printed&limit=20&offse
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
-Cancel a barcode, admin/operator only:
-
-```powershell
-curl -X POST "http://127.0.0.1:8000/api/barcodes/KG010000019KZ/cancel" `
-  -H "Content-Type: application/json" `
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
-  -d "{\"reason\":\"wrong print\"}"
-```
-
-Mark a barcode as used, admin/operator only:
-
-```powershell
-curl -X POST "http://127.0.0.1:8000/api/barcodes/KG010000019KZ/mark-used" `
-  -H "Content-Type: application/json" `
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
-  -d "{\"notes\":\"accepted in PUS\"}"
-```
+For MVP, SHPI lifecycle actions are intentionally limited to generation and printing.
+Barcode cancel and mark-used endpoints are not exposed in the active API.
 
 List print history:
 
@@ -328,7 +317,7 @@ curl "http://127.0.0.1:8000/api/departments/tree" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
-Create client, admin only:
+Legacy clients API remains available but is hidden from the MVP frontend:
 
 ```powershell
 curl -X POST "http://127.0.0.1:8000/api/clients" `
@@ -343,7 +332,7 @@ Create range request:
 curl -X POST "http://127.0.0.1:8000/api/range-requests" `
   -H "Content-Type: application/json" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
-  -d "{\"client_id\":1,\"package_type\":\"KG\",\"requested_quantity\":100,\"notes\":\"initial allocation\"}"
+  -d "{\"department_id\":1,\"purpose\":\"monthly labels\",\"requested_quantity\":100,\"requested_code\":\"KG\",\"notes\":\"initial allocation\"}"
 ```
 
 Approve range request, admin/operator only:
@@ -352,7 +341,7 @@ Approve range request, admin/operator only:
 curl -X POST "http://127.0.0.1:8000/api/range-requests/1/approve" `
   -H "Content-Type: application/json" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
-  -d "{\"notes\":\"approved\"}"
+  -d "{\"approved_code\":\"KG\",\"notes\":\"approved\"}"
 ```
 
 List ranges, admin/operator only:
@@ -420,10 +409,15 @@ Rules:
 - Range approval creates a `barcode_ranges` row.
 - Range generation uses `SELECT FOR UPDATE` on `barcode_ranges`.
 - Range generation creates `GeneratedBatch` and `GeneratedBarcode` rows linked by `range_id`.
+- Operator access is limited to the operator department subtree.
+- Client-role access is limited to the user's own department.
 - When all numbers are consumed, range status becomes `exhausted`.
-- Barcode lifecycle status is one of `generated`, `printed`, `used`, `cancelled`.
-- Printing moves `generated` barcodes to `printed`, but does not overwrite `used` or `cancelled`.
-- Used barcodes cannot be cancelled; cancelled barcodes cannot be marked used.
+- Current MVP range statuses are `active`, `exhausted`, and `cancelled`.
+- Frontend should hide renewal buttons and expiry controls for MVP.
+- Barcode lifecycle status is one of `generated`, `printed`.
+- New SHPI rows store `generated_by`, `generated_at`, `department_id`, and optional `range_id`.
+- Printing moves `generated` barcodes to `printed` and stores `printed_by` and `printed_at`.
+- Old `used`/`cancelled` columns and data remain in the database only for compatibility.
 
 ## Legacy Files
 

@@ -4,7 +4,7 @@ FastAPI backend for a KazPost-style barcode generation system.
 
 The project currently includes the application scaffold, async database setup, migrations, seed data, and barcode number generation endpoints.
 
-It also includes authentication, roles, audit logging, clients, range requests, barcode range allocation, SHPI generation from allocated ranges, and individual SHPI lifecycle tracking.
+It also includes authentication, roles, audit logging, legacy clients API, range requests, barcode range allocation, SHPI generation from allocated ranges, and individual SHPI lifecycle tracking.
 
 ## Requirements
 
@@ -140,8 +140,8 @@ curl "http://127.0.0.1:8000/api/auth/me" `
 Roles:
 
 - `admin`: users, audit logs, generation, history, print.
-- `operator`: clients view, range request handling, ranges view, generation, barcode history, PDF preview, PDF print, print history.
-- `client`: generation, PDF preview, and own range requests.
+- `operator`: own department subtree for range requests, ranges, generation, barcode history, PDF preview, PDF print, and print history.
+- `client`: own department only for requests, ranges, generation, PDF preview/download, and own history.
 
 ## Generate Barcode Numbers
 
@@ -221,40 +221,22 @@ curl "http://127.0.0.1:8000/api/barcodes/lifecycle?status=printed&limit=20&offse
 
 Filters:
 
-- `status`: `generated`, `printed`, `used`, `cancelled`
+- `status`: `generated`, `printed`
 - `package_type`
 - `department_id`
 - `printed`
 - `limit`
 - `offset`
 
-Cancel a barcode, admin/operator only:
-
-```powershell
-curl -X POST "http://127.0.0.1:8000/api/barcodes/KG010000019KZ/cancel" `
-  -H "Content-Type: application/json" `
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
-  -d "{\"reason\":\"wrong print\"}"
-```
-
-Mark a barcode as used, admin/operator only:
-
-```powershell
-curl -X POST "http://127.0.0.1:8000/api/barcodes/KG010000019KZ/mark-used" `
-  -H "Content-Type: application/json" `
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
-  -d "{\"notes\":\"accepted in PUS\"}"
-```
+For MVP, barcode cancel and mark-used endpoints are not exposed in the active API.
 
 Lifecycle rules:
 
 - new barcodes start as `generated`;
 - printing changes `generated` barcodes to `printed`;
-- printing does not overwrite `used` or `cancelled`;
-- `generated` and `printed` barcodes can be cancelled;
-- `generated` and `printed` barcodes can be marked as used;
-- `used` barcodes cannot be cancelled;
-- `cancelled` barcodes cannot be marked used.
+- generation stores `generated_by`, `generated_at`, `department_id`, and optional `range_id`;
+- printing stores `printed_by` and `printed_at`;
+- old `used`/`cancelled` columns and data remain only for compatibility.
 
 ## PDF Labels
 
@@ -294,7 +276,9 @@ curl "http://127.0.0.1:8000/api/audit-logs?limit=20&offset=0" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
-## Clients
+## Legacy Clients
+
+Clients are hidden from the MVP frontend. These endpoints remain for legacy compatibility and should not be used by the active department-based workflow.
 
 List clients, admin/operator:
 
@@ -329,7 +313,7 @@ Create a range request:
 curl -X POST "http://127.0.0.1:8000/api/range-requests" `
   -H "Content-Type: application/json" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
-  -d "{\"client_id\":1,\"package_type\":\"KG\",\"requested_quantity\":100,\"notes\":\"initial allocation\"}"
+  -d "{\"department_id\":1,\"purpose\":\"monthly labels\",\"requested_quantity\":100,\"requested_code\":\"KG\",\"notes\":\"initial allocation\"}"
 ```
 
 List range requests:
@@ -345,7 +329,7 @@ Approve a range request, admin/operator only:
 curl -X POST "http://127.0.0.1:8000/api/range-requests/1/approve" `
   -H "Content-Type: application/json" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" `
-  -d "{\"notes\":\"approved\"}"
+  -d "{\"approved_code\":\"KG\",\"notes\":\"approved\"}"
 ```
 
 Reject a range request, admin/operator only:
@@ -392,6 +376,23 @@ Range generation behavior:
 - links generated batch and barcode rows to `range_id`;
 - increments `BarcodeRange.current_number`;
 - sets range status to `exhausted` when all numbers are consumed.
+
+MVP ownership:
+
+- admin can access all departments and data;
+- operator can access own department and descendants;
+- client can access only own department;
+- generated batches, generated barcodes, ranges, PDF preview/print, and print history are scoped by `department_id`.
+
+MVP range lifecycle:
+
+- active ranges can generate SHPI;
+- active ranges can be cancelled by admin/operator;
+- exhausted ranges cannot be cancelled;
+- expiry/renewal fields remain in the database for future use, but the backend does not auto-expire ranges;
+- `POST /api/ranges/{range_id}/renew` is not exposed in the active API;
+- unused numbers are not reused because allocation is forward-only;
+- frontend should hide renewal buttons and expiry controls.
 
 Check remaining numbers:
 

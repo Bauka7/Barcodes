@@ -4,10 +4,16 @@ import type { components } from './generated';
 type S = components['schemas'];
 
 export type GeneratedBatchItem = S['GeneratedBatchItem'];
-export type GeneratedBarcodeItem = S['GeneratedBarcodeItem'];
+export type GeneratedBarcodeItem = S['GeneratedBarcodeItem'] & {
+  generated_by?: string | null;
+  printed_by?: string | null;
+};
 export type GeneratedBatchDetail = S['GeneratedBatchDetail'];
 export type GeneratedBarcodeSearchResponse = S['GeneratedBarcodeSearchResponse'];
-export type BarcodeDetailResponse = S['BarcodeDetailResponse'];
+export type BarcodeDetailResponse = S['BarcodeDetailResponse'] & {
+  generated_by?: string | null;
+  printed_by?: string | null;
+};
 export type BarcodeNumberRequest = S['BarcodeNumberRequest'];
 export type BarcodeNumberResponse = S['BarcodeNumberResponse'];
 export type BarcodeLifecycleListResponse = S['BarcodeLifecycleListResponse'];

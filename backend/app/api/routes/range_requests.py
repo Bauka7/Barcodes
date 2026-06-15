@@ -14,10 +14,11 @@ from app.services.auth_service import require_roles
 from app.services.range_request_service import (
     approve_range_request,
     cancel_range_request,
-    can_view_range_request,
+    can_access_range_request,
     create_range_request,
     deserialize_payload,
     get_range_request_by_id,
+    get_range_request_by_id_for_update,
     list_range_requests,
     reject_range_request,
 )
@@ -154,7 +155,11 @@ async def get_range_request_endpoint(
             detail=f"Range request with id {request_id} was not found.",
         )
 
-    if not can_view_range_request(current_user=current_user, range_request=range_request):
+    if not await can_access_range_request(
+        session=session,
+        current_user=current_user,
+        range_request=range_request,
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not enough permissions.",
@@ -177,7 +182,10 @@ async def approve_range_request_endpoint(
 ) -> RangeRequestRead:
     try:
         async with session.begin():
-            range_request = await get_range_request_by_id(session=session, request_id=request_id)
+            range_request = await get_range_request_by_id_for_update(
+                session=session,
+                request_id=request_id,
+            )
 
             if range_request is None:
                 raise HTTPException(
@@ -185,12 +193,22 @@ async def approve_range_request_endpoint(
                     detail=f"Range request with id {request_id} was not found.",
                 )
 
+            if not await can_access_range_request(
+                session=session,
+                current_user=current_user,
+                range_request=range_request,
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not enough permissions.",
+                )
+
             range_request, barcode_range = await approve_range_request(
                 session=session,
                 range_request=range_request,
                 handled_by=current_user,
                 approved_code=payload.approved_code,
-                expires_at=payload.expires_at,
+                expires_at=None,
                 notes=payload.notes,
             )
             await session.refresh(range_request)
@@ -205,9 +223,6 @@ async def approve_range_request_endpoint(
                 details={
                     "range_id": barcode_range.id,
                     "approved_code": range_request.approved_code,
-                    "expires_at": (
-                        payload.expires_at.isoformat() if payload.expires_at else None
-                    ),
                 },
             )
             await create_audit_log(
@@ -247,12 +262,25 @@ async def reject_range_request_endpoint(
 ) -> RangeRequestRead:
     try:
         async with session.begin():
-            range_request = await get_range_request_by_id(session=session, request_id=request_id)
+            range_request = await get_range_request_by_id_for_update(
+                session=session,
+                request_id=request_id,
+            )
 
             if range_request is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Range request with id {request_id} was not found.",
+                )
+
+            if not await can_access_range_request(
+                session=session,
+                current_user=current_user,
+                range_request=range_request,
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Not enough permissions.",
                 )
 
             range_request = await reject_range_request(
@@ -294,7 +322,10 @@ async def cancel_range_request_endpoint(
 ) -> RangeRequestRead:
     try:
         async with session.begin():
-            range_request = await get_range_request_by_id(session=session, request_id=request_id)
+            range_request = await get_range_request_by_id_for_update(
+                session=session,
+                request_id=request_id,
+            )
 
             if range_request is None:
                 raise HTTPException(
@@ -303,7 +334,11 @@ async def cancel_range_request_endpoint(
                 )
 
             # Клиент может отменить только заявку своей организации.
-            if not can_view_range_request(current_user=current_user, range_request=range_request):
+            if not await can_access_range_request(
+                session=session,
+                current_user=current_user,
+                range_request=range_request,
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not enough permissions.",

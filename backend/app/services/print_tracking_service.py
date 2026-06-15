@@ -17,13 +17,35 @@ async def create_printed_batch(
     if not barcodes:
         raise ValueError("Cannot print an empty batch.")
 
+    result = await session.execute(
+        select(GeneratedBarcode)
+        .where(GeneratedBarcode.batch_id == batch.id)
+        .order_by(GeneratedBarcode.id)
+        .with_for_update()
+    )
+    locked_barcodes = list(result.scalars().all())
+    if not locked_barcodes:
+        raise ValueError("Cannot print an empty batch.")
+
+    unsupported_statuses = {
+        barcode.status
+        for barcode in locked_barcodes
+        if barcode.status not in {"generated", "printed"}
+    }
+    if unsupported_statuses:
+        statuses = ", ".join(sorted(unsupported_statuses))
+        raise ValueError(
+            "Only generated or already printed barcodes can be printed. "
+            f"Unsupported statuses found: {statuses}."
+        )
+
     now = datetime.now(timezone.utc)
     printed_batch = PrintedBatch(
         generated_batch_id=batch.id,
         department_id=batch.department_id,
-        printed_count=len(barcodes),
-        first_barcode=barcodes[0].barcode,
-        last_barcode=barcodes[-1].barcode,
+        printed_count=len(locked_barcodes),
+        first_barcode=locked_barcodes[0].barcode,
+        last_barcode=locked_barcodes[-1].barcode,
         printed_by=printed_by,
         printer_name=printer_name,
         status="printed",
@@ -32,10 +54,13 @@ async def create_printed_batch(
     )
     session.add(printed_batch)
 
-    for barcode in barcodes:
+    for barcode in locked_barcodes:
         barcode.printed = True
-        barcode.printed_at = now
-        if barcode.status not in {"used", "cancelled"}:
+        if barcode.printed_at is None:
+            barcode.printed_at = now
+        if barcode.printed_by is None:
+            barcode.printed_by = printed_by
+        if barcode.status == "generated":
             barcode.status = "printed"
 
     await session.flush()
@@ -57,6 +82,7 @@ async def list_print_history(
     limit: int = 20,
     offset: int = 0,
     department_id: int | None = None,
+    department_ids: list[int] | None = None,
     generated_batch_id: int | None = None,
 ) -> list[PrintedBatch]:
     validated_limit, validated_offset = _validate_print_history_pagination(limit, offset)
@@ -64,6 +90,11 @@ async def list_print_history(
 
     if department_id is not None:
         statement = statement.where(PrintedBatch.department_id == department_id)
+
+    if department_ids is not None:
+        if not department_ids:
+            return []
+        statement = statement.where(PrintedBatch.department_id.in_(department_ids))
 
     if generated_batch_id is not None:
         statement = statement.where(PrintedBatch.generated_batch_id == generated_batch_id)

@@ -4,7 +4,6 @@ import type {
   BarcodeDetailResponse,
   BarcodeLifecycleListResponse,
   BarcodeNumberResponse,
-  GeneratedBarcodeItem,
   GeneratedBatchDetail,
   GeneratedBatchItem,
   PrintedBatchItem,
@@ -36,20 +35,6 @@ export function listLifecycle(p: LifecycleParams): Promise<BarcodeLifecycleListR
 
 export function getBarcodeDetail(barcode: string): Promise<BarcodeDetailResponse> {
   return apiFetch<BarcodeDetailResponse>(`/barcodes/${encodeURIComponent(barcode)}/detail`);
-}
-
-export function cancelBarcode(barcode: string, reason: string): Promise<GeneratedBarcodeItem> {
-  return apiFetch<GeneratedBarcodeItem>(`/barcodes/${encodeURIComponent(barcode)}/cancel`, {
-    method: 'POST',
-    body: { reason },
-  });
-}
-
-export function markBarcodeUsed(barcode: string, notes?: string): Promise<GeneratedBarcodeItem> {
-  return apiFetch<GeneratedBarcodeItem>(`/barcodes/${encodeURIComponent(barcode)}/mark-used`, {
-    method: 'POST',
-    body: { notes },
-  });
 }
 
 export interface BatchesParams {

@@ -9,6 +9,7 @@ from app.services.barcode_history_service import create_generation_history
 
 CHECK_DIGIT_WEIGHTS = (8, 6, 4, 2, 3, 5, 9, 7)
 PACKAGE_TYPE_PATTERN = re.compile(r"^[A-Z]{2}$")
+COUNTRY_SUFFIX_PATTERN = re.compile(r"^[A-Z]{2}$")
 DEFAULT_OBL_CODE = "01"
 DEFAULT_COUNTRY_SUFFIX = "KZ"
 MAX_COUNTER_VALUE = 999_999
@@ -40,6 +41,15 @@ def validate_quantity(quantity: int) -> int:
         raise ValueError("quantity must be between 1 and 1000.")
 
     return quantity
+
+
+def validate_country_suffix(country_suffix: str) -> str:
+    normalized_suffix = country_suffix.strip().upper()
+
+    if not COUNTRY_SUFFIX_PATTERN.fullmatch(normalized_suffix):
+        raise ValueError("country_suffix must be exactly 2 uppercase latin letters.")
+
+    return normalized_suffix
 
 
 def calculate_check_digit(body_8_digits: str) -> int:
@@ -83,13 +93,15 @@ def build_barcode_number(
     counter_value: int,
     suffix: str,
 ) -> str:
+    normalized_suffix = validate_country_suffix(suffix)
+
     if len(obl_code) != 2 or not obl_code.isdigit():
         raise ValueError("obl_code must be a 2-digit string.")
 
     counter_6_digits = str(counter_value).zfill(6)
     body_8_digits = f"{obl_code}{counter_6_digits}"
     check_digit = calculate_check_digit(body_8_digits)
-    return f"{package_type}{body_8_digits}{check_digit}{suffix}"
+    return f"{package_type}{body_8_digits}{check_digit}{normalized_suffix}"
 
 
 async def generate_barcode_number(session: AsyncSession, package_type: str) -> str:
@@ -111,7 +123,9 @@ async def generate_barcode_numbers(
 
     async with session.begin():
         obl_code = await get_setting_value(session, "obl_code", DEFAULT_OBL_CODE)
-        suffix = (await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)).upper()
+        suffix = validate_country_suffix(
+            await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)
+        )
 
         result = await session.execute(
             select(BarcodeCounter)
@@ -159,7 +173,9 @@ async def generate_barcode_numbers_with_history(
 
     async with session.begin():
         obl_code = await get_setting_value(session, "obl_code", DEFAULT_OBL_CODE)
-        suffix = (await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)).upper()
+        suffix = validate_country_suffix(
+            await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)
+        )
 
         result = await session.execute(
             select(BarcodeCounter)

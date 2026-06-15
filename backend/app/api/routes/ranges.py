@@ -10,16 +10,19 @@ from app.schemas import (
     RangeCancelRequest,
     RangeGenerateRequest,
     RangeRemainingResponse,
-    RangeRenewRequest,
 )
-from app.services.audit_service import create_audit_log, log_user_action
+from app.services.audit_service import create_audit_log, log_user_action, safe_log_user_action
 from app.services.auth_service import require_roles
 from app.services.barcode_range_service import (
     cancel_range,
-    expire_due_ranges,
     get_range_by_id,
+    get_range_by_id_for_update,
     list_ranges,
-    renew_range,
+)
+from app.services.department_scope_service import (
+    DepartmentScopeError,
+    get_user_department_scope_ids,
+    require_department_access,
 )
 from app.services.range_generation_service import (
     BarcodeRangeNotFoundError,
@@ -72,7 +75,7 @@ def _batch_to_schema(batch: GeneratedBatch) -> GeneratedBatchItem:
     )
 
 
-def _assert_range_client_access(current_user: User, barcode_range: BarcodeRange) -> None:
+def _legacy_unused_range_client_access(current_user: User, barcode_range: BarcodeRange) -> None:
     """Сотрудники видят все диапазоны; клиент — только диапазоны своей организации."""
 
     if current_user.role in {"admin", "operator"}:
@@ -91,6 +94,24 @@ def _assert_range_client_access(current_user: User, barcode_range: BarcodeRange)
     )
 
 
+async def _assert_range_department_access(
+    session: AsyncSession,
+    current_user: User,
+    barcode_range: BarcodeRange,
+) -> None:
+    try:
+        await require_department_access(
+            session=session,
+            user=current_user,
+            department_id=barcode_range.issued_to_department_id,
+        )
+    except DepartmentScopeError as error:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(error),
+        ) from error
+
+
 @router.get("/my", response_model=list[BarcodeRangeRead], status_code=status.HTTP_200_OK)
 async def get_my_ranges(
     limit: int = Query(default=100),
@@ -99,20 +120,22 @@ async def get_my_ranges(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> list[BarcodeRangeRead]:
-    if current_user.client_id is None:
+    if current_user.department_id is None:
         return []
 
-    await expire_due_ranges(session=session)
-
     try:
+        department_ids = await get_user_department_scope_ids(
+            session=session,
+            user=current_user,
+        )
         ranges = await list_ranges(
             session=session,
             limit=limit,
             offset=offset,
             status=status_filter,
-            client_id=current_user.client_id,
+            department_ids=department_ids,
         )
-    except ValueError as error:
+    except (DepartmentScopeError, ValueError) as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
@@ -132,9 +155,11 @@ async def get_ranges(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator")),
 ) -> list[BarcodeRangeRead]:
-    await expire_due_ranges(session=session)
-
     try:
+        department_ids = await get_user_department_scope_ids(
+            session=session,
+            user=current_user,
+        )
         ranges = await list_ranges(
             session=session,
             limit=limit,
@@ -143,8 +168,9 @@ async def get_ranges(
             status=status_filter,
             client_id=client_id,
             department_id=department_id,
+            department_ids=department_ids,
         )
-    except ValueError as error:
+    except (DepartmentScopeError, ValueError) as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
@@ -165,9 +191,6 @@ async def generate_from_range_endpoint(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> BarcodeNumberResponse:
-    # Сначала помечаем истёкшие, затем проверяем владение/статус.
-    await expire_due_ranges(session=session)
-
     # Клиент может генерировать только из диапазона своей организации.
     barcode_range = await get_range_by_id(session=session, range_id=range_id)
     if barcode_range is None:
@@ -175,7 +198,11 @@ async def generate_from_range_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Barcode range with id {range_id} was not found.",
         )
-    _assert_range_client_access(current_user=current_user, barcode_range=barcode_range)
+    await _assert_range_department_access(
+        session=session,
+        current_user=current_user,
+        barcode_range=barcode_range,
+    )
 
     await log_user_action(
         session=session,
@@ -206,7 +233,7 @@ async def generate_from_range_endpoint(
             detail=str(error),
         ) from error
 
-    await log_user_action(
+    await safe_log_user_action(
         session=session,
         action="range_generation_completed",
         user=current_user,
@@ -224,7 +251,7 @@ async def generate_from_range_endpoint(
     )
 
     if current_user.role == "client":
-        await log_user_action(
+        await safe_log_user_action(
             session=session,
             action="client_range_generated",
             user=current_user,
@@ -235,7 +262,7 @@ async def generate_from_range_endpoint(
         )
 
     if result.range_status == "exhausted":
-        await log_user_action(
+        await safe_log_user_action(
             session=session,
             action="range_exhausted",
             user=current_user,
@@ -264,8 +291,6 @@ async def get_range_remaining_endpoint(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> RangeRemainingResponse:
-    await expire_due_ranges(session=session)
-
     try:
         barcode_range = await get_range_remaining(session=session, range_id=range_id)
     except BarcodeRangeNotFoundError as error:
@@ -274,7 +299,11 @@ async def get_range_remaining_endpoint(
             detail=str(error),
         ) from error
 
-    _assert_range_client_access(current_user=current_user, barcode_range=barcode_range)
+    await _assert_range_department_access(
+        session=session,
+        current_user=current_user,
+        barcode_range=barcode_range,
+    )
 
     return RangeRemainingResponse(
         range_id=barcode_range.id,
@@ -299,13 +328,22 @@ async def cancel_range_endpoint(
 ) -> BarcodeRangeRead:
     try:
         async with session.begin():
-            barcode_range = await get_range_by_id(session=session, range_id=range_id)
+            barcode_range = await get_range_by_id_for_update(
+                session=session,
+                range_id=range_id,
+            )
 
             if barcode_range is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Barcode range with id {range_id} was not found.",
                 )
+
+            await _assert_range_department_access(
+                session=session,
+                current_user=current_user,
+                barcode_range=barcode_range,
+            )
 
             barcode_range = await cancel_range(
                 session=session,
@@ -332,53 +370,6 @@ async def cancel_range_endpoint(
     return _barcode_range_to_schema(barcode_range)
 
 
-@router.post(
-    "/{range_id}/renew",
-    response_model=BarcodeRangeRead,
-    status_code=status.HTTP_200_OK,
-)
-async def renew_range_endpoint(
-    range_id: int,
-    payload: RangeRenewRequest,
-    request: Request,
-    session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(require_roles("admin", "operator")),
-) -> BarcodeRangeRead:
-    try:
-        async with session.begin():
-            barcode_range = await get_range_by_id(session=session, range_id=range_id)
-
-            if barcode_range is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Barcode range with id {range_id} was not found.",
-                )
-
-            barcode_range = await renew_range(
-                session=session,
-                barcode_range=barcode_range,
-                new_expires_at=payload.expires_at,
-                renewed_by_user=current_user,
-            )
-            await session.refresh(barcode_range)
-            await create_audit_log(
-                session=session,
-                action="range_renewed",
-                user=current_user,
-                request=request,
-                entity_type="barcode_range",
-                entity_id=str(range_id),
-                details={"expires_at": payload.expires_at.isoformat()},
-            )
-    except ValueError as error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error),
-        ) from error
-
-    return _barcode_range_to_schema(barcode_range)
-
-
 @router.get(
     "/{range_id}/batches",
     response_model=list[GeneratedBatchItem],
@@ -389,13 +380,19 @@ async def get_range_batches(
     limit: int = Query(default=100),
     offset: int = Query(default=0),
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(require_roles("admin", "operator")),
+    current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> list[GeneratedBatchItem]:
-    if await get_range_by_id(session=session, range_id=range_id) is None:
+    barcode_range = await get_range_by_id(session=session, range_id=range_id)
+    if barcode_range is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Barcode range with id {range_id} was not found.",
         )
+    await _assert_range_department_access(
+        session=session,
+        current_user=current_user,
+        barcode_range=barcode_range,
+    )
 
     try:
         batches = await list_batches_for_range(
@@ -419,8 +416,6 @@ async def get_range_endpoint(
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> BarcodeRangeRead:
-    await expire_due_ranges(session=session)
-
     barcode_range = await get_range_by_id(session=session, range_id=range_id)
 
     if barcode_range is None:
@@ -429,6 +424,10 @@ async def get_range_endpoint(
             detail=f"Barcode range with id {range_id} was not found.",
         )
 
-    _assert_range_client_access(current_user=current_user, barcode_range=barcode_range)
+    await _assert_range_department_access(
+        session=session,
+        current_user=current_user,
+        barcode_range=barcode_range,
+    )
 
     return _barcode_range_to_schema(barcode_range)

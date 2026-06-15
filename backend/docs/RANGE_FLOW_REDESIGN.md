@@ -1,5 +1,11 @@
 # Редизайн потока выдачи диапазонов ШПИ (ветка `backend`)
 
+> MVP update: active ownership is now department-based. The `clients` table and `/api/clients`
+> endpoints remain for legacy compatibility, but the frontend hides client-company management.
+> Admin sees all departments, operator sees their department subtree, and client-role users see
+> only their own department. Requests, ranges, batches, barcodes, PDF, and print history are scoped
+> by `department_id`.
+
 Документация по всем изменениям бэкенда. Описывает **что добавили/изменили** и **зачем**.
 Все изменения сделаны поверх коммита `Implement frontend MVP` и на момент написания не закоммичены.
 
@@ -132,12 +138,12 @@ CHECK-ограничение на допустимые статусы.
 ### 6.2 Создание заявки
 - `purpose` и `department_id` — обязательны; `requested_quantity` валидируется.
 - `package_type`/`requested_code` валидируются только если переданы.
-- Для роли `client` `client_id` **принудительно** берётся из аккаунта (нельзя подставить чужой);
-  staff указывает `client_id` явно.
+- Для роли `client` `client_id` **принудительно** берётся из аккаунта (нельзя подставить чужой).
+- Для MVP staff-заявки могут быть department-only (`client_id = null`); если legacy `client_id` передан, он валидируется.
 - `department_id` обязателен, потому что **название отдела печатается на наклейке**.
 
 ### 6.3 Одобрение (назначение кода + резерв)
-1. `code = approved_code` (или `package_type` заявки для legacy); если нет — ошибка.
+1. `code = approved_code`; если нет — ошибка.
 2. `ensure_code_allocatable(code)`: код есть в справочнике, статус `available/active`,
    под него есть счётчик; при первой выдаче `available → active`.
 3. `code` фиксируется на заявке (`package_type`, `approved_code`).
@@ -156,6 +162,15 @@ CHECK-ограничение на допустимые статусы.
 ### 6.5 Forward-only аллокация
 Диапазоны режутся только «вперёд» по `barcode_counters`. Переиспользование отменённых/истёкших
 диапазонов **намеренно отложено** (см. §9).
+
+MVP lifecycle note:
+
+- active ranges can become `exhausted` by generation;
+- active ranges can become `cancelled` by admin/operator;
+- expiry and renewal are disabled in the active backend workflow;
+- `expires_at` remains in the database for future use;
+- unused numbers are not reused because allocation is forward-only;
+- frontend should hide renewal buttons and expiry controls.
 
 ---
 

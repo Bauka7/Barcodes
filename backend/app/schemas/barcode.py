@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class BarcodeNumberRequest(BaseModel):
@@ -44,7 +44,12 @@ class GeneratedBarcodeItem(BaseModel):
     sequence_number: int
     printed: bool
     printed_at: datetime | None
-    status: str = "generated"
+    generated_by: str | None = None
+    printed_by: str | None = None
+    status: str = Field(
+        default="generated",
+        description="MVP statuses: generated or printed. Legacy rows may contain older values.",
+    )
     cancelled_at: datetime | None = None
     cancelled_by: str | None = None
     cancellation_reason: str | None = None
@@ -60,14 +65,6 @@ class GeneratedBatchDetail(GeneratedBatchItem):
 
 class GeneratedBarcodeSearchResponse(GeneratedBarcodeItem):
     batch: GeneratedBatchItem
-
-
-class BarcodeCancelRequest(BaseModel):
-    reason: str
-
-
-class BarcodeMarkUsedRequest(BaseModel):
-    notes: str | None = None
 
 
 class BarcodeDepartmentInfo(BaseModel):

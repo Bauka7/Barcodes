@@ -48,6 +48,8 @@ class GeneratedBarcode(Base):
         index=True,
         nullable=False,
     )
+    generated_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    printed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
