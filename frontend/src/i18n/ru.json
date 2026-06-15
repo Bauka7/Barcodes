@@ -136,7 +136,9 @@
     "packageType": "Вид",
     "department": "Отдел",
     "range": "Диапазон",
+    "rangeCreatedBy": "Создал диапазон",
     "sequence": "Порядковый №",
+    "generatedShpiBy": "Создал ШПИ",
     "cancelReason": "Причина отмены"
   },
   "search": {

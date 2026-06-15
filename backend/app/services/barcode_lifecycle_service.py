@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import BarcodeRange, Department, GeneratedBarcode, GeneratedBatch
+from app.models import BarcodeRange, Department, GeneratedBarcode, GeneratedBatch, User
 from app.services.barcode_number_service import validate_package_type
 
 BARCODE_LIFECYCLE_STATUSES = {"generated", "printed"}
@@ -14,7 +14,7 @@ class GeneratedBarcodeNotFoundError(LookupError):
 async def get_barcode_detail(
     session: AsyncSession,
     barcode: str,
-) -> tuple[GeneratedBarcode, GeneratedBatch, BarcodeRange | None, Department | None]:
+) -> tuple[GeneratedBarcode, GeneratedBatch, BarcodeRange | None, Department | None, User | None]:
     normalized_barcode = barcode.strip().upper()
     result = await session.execute(
         select(GeneratedBarcode).where(GeneratedBarcode.barcode == normalized_barcode)
@@ -32,11 +32,17 @@ async def get_barcode_detail(
     batch = batch_result.scalar_one()
 
     barcode_range = None
+    range_created_by = None
     if generated_barcode.range_id is not None:
         range_result = await session.execute(
             select(BarcodeRange).where(BarcodeRange.id == generated_barcode.range_id)
         )
         barcode_range = range_result.scalar_one_or_none()
+        if barcode_range is not None and barcode_range.issued_by is not None:
+            user_result = await session.execute(
+                select(User).where(User.id == barcode_range.issued_by)
+            )
+            range_created_by = user_result.scalar_one_or_none()
 
     department = None
     if generated_barcode.department_id is not None:
@@ -45,7 +51,7 @@ async def get_barcode_detail(
         )
         department = department_result.scalar_one_or_none()
 
-    return generated_barcode, batch, barcode_range, department
+    return generated_barcode, batch, barcode_range, department, range_created_by
 
 
 def _validate_lifecycle_pagination(limit: int, offset: int) -> tuple[int, int]:

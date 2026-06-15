@@ -13,6 +13,7 @@ export type GeneratedBarcodeSearchResponse = S['GeneratedBarcodeSearchResponse']
 export type BarcodeDetailResponse = S['BarcodeDetailResponse'] & {
   generated_by?: string | null;
   printed_by?: string | null;
+  range_created_by?: string | null;
 };
 export type BarcodeNumberRequest = S['BarcodeNumberRequest'];
 export type BarcodeNumberResponse = S['BarcodeNumberResponse'];

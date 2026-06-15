@@ -23,17 +23,23 @@ export function BarcodeDetailCard({ barcode }: Props) {
   if (isError) return <ErrorText error={error} />;
   if (!data) return null;
 
+  const emptyValue = '—';
   const rows: Array<[string, React.ReactNode]> = [
-    [t('detail.batch'), `#${data.batch.id}`],
     [t('detail.packageType'), data.package_type],
-    [t('detail.department'), data.department ? `${data.department.name} (${data.department.code})` : '—'],
     [
-      t('detail.range'),
-      data.range ? `#${data.range.id} · ${data.range.start_number}–${data.range.end_number}` : '—',
+      t('detail.department'),
+      data.department ? `${data.department.name} (${data.department.code})` : emptyValue,
+    ],
+    [
+      t('detail.rangeCreatedBy'),
+      <span className="font-mono">{data.range_created_by ?? emptyValue}</span>,
     ],
     [t('detail.sequence'), data.sequence_number],
-    [t('lifecycle.generatedBy'), <span className="font-mono">{data.generated_by ?? data.batch.generated_by ?? '—'}</span>],
-    [t('lifecycle.printedBy'), <span className="font-mono">{data.printed_by ?? '—'}</span>],
+    [
+      t('detail.generatedShpiBy'),
+      <span className="font-mono">{data.generated_by ?? data.batch.generated_by ?? emptyValue}</span>,
+    ],
+    [t('lifecycle.printedBy'), <span className="font-mono">{data.printed_by ?? emptyValue}</span>],
   ];
 
   return (

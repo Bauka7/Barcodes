@@ -86,6 +86,7 @@ class BarcodeRangeInfo(BaseModel):
 class BarcodeDetailResponse(GeneratedBarcodeItem):
     batch: GeneratedBatchItem
     range: BarcodeRangeInfo | None = None
+    range_created_by: str | None = None
     department: BarcodeDepartmentInfo | None = None
 
 
