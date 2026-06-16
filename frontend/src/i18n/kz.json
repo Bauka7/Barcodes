@@ -137,7 +137,9 @@
     "packageType": "Түрі",
     "department": "Бөлім",
     "range": "Диапазон",
+    "rangeCreatedBy": "Диапазонды құрды",
     "sequence": "Реттік №",
+    "generatedShpiBy": "ШПИ құрды",
     "cancelReason": "Бас тарту себебі"
   },
   "search": {

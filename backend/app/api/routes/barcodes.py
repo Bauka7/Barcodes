@@ -297,6 +297,7 @@ def _barcode_detail_to_schema(
     batch: GeneratedBatch,
     barcode_range,
     department,
+    range_created_by,
 ) -> BarcodeDetailResponse:
     range_info = None
     if barcode_range is not None:
@@ -323,6 +324,7 @@ def _barcode_detail_to_schema(
         **barcode_item.model_dump(),
         batch=_batch_to_schema(batch),
         range=range_info,
+        range_created_by=range_created_by.username if range_created_by is not None else None,
         department=department_info,
     )
 
@@ -339,7 +341,7 @@ async def get_barcode_detail_endpoint(
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> BarcodeDetailResponse:
     try:
-        barcode_record, batch, barcode_range, department = await get_barcode_detail(
+        barcode_record, batch, barcode_range, department, range_created_by = await get_barcode_detail(
             session=session,
             barcode=barcode,
         )
@@ -374,6 +376,7 @@ async def get_barcode_detail_endpoint(
         batch=batch,
         barcode_range=barcode_range,
         department=department,
+        range_created_by=range_created_by,
     )
 
 
