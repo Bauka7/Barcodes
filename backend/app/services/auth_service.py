@@ -22,6 +22,10 @@ from app.services.external_auth_service import (
 
 VALID_ROLES = {"admin", "operator", "client"}
 EXTERNAL_AUTH_MODES = {"external", "keycloak"}
+EXTERNAL_USER_NOT_ACTIVATED_MESSAGE = (
+    "User was registered from Keycloak but is not activated in QazPostWeb. "
+    "Contact administrator."
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -156,6 +160,7 @@ async def create_user(
         username=username,
         hashed_password=hash_password(payload.password),
         email=payload.email,
+        phone=payload.phone,
         full_name=payload.full_name,
         role=role,
         department_id=payload.department_id,
@@ -179,6 +184,9 @@ async def update_user(
 
     if "email" in updated_fields:
         user.email = payload.email
+
+    if "phone" in updated_fields:
+        user.phone = payload.phone
 
     if "role" in updated_fields and payload.role is not None:
         user.role = validate_role(payload.role)
@@ -262,6 +270,7 @@ async def _resolve_external_user(
     username: str,
     email: str | None,
     full_name: str | None = None,
+    phone: str | None = None,
 ) -> User:
     user = await get_user_by_username(
         session=session,
@@ -269,6 +278,20 @@ async def _resolve_external_user(
     )
     if user is None and email:
         user = await get_user_by_email(session=session, email=email)
+
+    if user is not None:
+        changed = False
+        if not user.email and email:
+            user.email = email
+            changed = True
+        if not user.full_name and full_name:
+            user.full_name = full_name
+            changed = True
+        if not user.phone and phone:
+            user.phone = phone
+            changed = True
+        if changed:
+            await session.flush()
 
     if user is None:
         settings = get_settings()
@@ -293,11 +316,12 @@ async def _resolve_external_user(
             username=username,
             hashed_password=None,
             email=email,
+            phone=phone,
             full_name=full_name,
             role=role,
             department_id=None,
             client_id=None,
-            is_active=True,
+            is_active=False,
         )
         session.add(user)
         try:
@@ -309,11 +333,15 @@ async def _resolve_external_user(
                 user = await get_user_by_email(session=session, email=email)
             if user is None:
                 raise
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=EXTERNAL_USER_NOT_ACTIVATED_MESSAGE,
+        )
 
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User is inactive in QazPostWeb.",
+            detail=EXTERNAL_USER_NOT_ACTIVATED_MESSAGE,
         )
 
     return user
@@ -348,6 +376,7 @@ async def authenticate_external_password(
         username=external_user.username,
         email=external_user.email,
         full_name=external_user.full_name,
+        phone=external_user.phone,
     )
     return token, user
 
@@ -372,6 +401,7 @@ async def _get_current_user_from_external_token(
         username=external_user.username,
         email=external_user.email,
         full_name=external_user.full_name,
+        phone=external_user.phone,
     )
 
 

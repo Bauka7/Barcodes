@@ -22,6 +22,7 @@ class ExternalUserClaims:
     username: str
     email: str | None
     full_name: str | None
+    phone: str | None
     subject: str
 
 
@@ -183,6 +184,7 @@ async def validate_external_token(
     username_claim = settings.keycloak_username_claim.strip() or "preferred_username"
     email_claim = settings.keycloak_email_claim.strip() or "email"
     full_name_claim = settings.keycloak_full_name_claim.strip() or "name"
+    phone_claim = settings.keycloak_phone_claim.strip() or "phone_number"
 
     username = claims.get(username_claim)
     if not isinstance(username, str) or not username.strip():
@@ -190,6 +192,7 @@ async def validate_external_token(
 
     email = claims.get(email_claim)
     full_name = claims.get(full_name_claim)
+    phone = claims.get(phone_claim)
     subject = claims.get("sub")
 
     return ExternalUserClaims(
@@ -198,5 +201,6 @@ async def validate_external_token(
         full_name=full_name.strip()
         if isinstance(full_name, str) and full_name.strip()
         else None,
+        phone=phone.strip() if isinstance(phone, str) and phone.strip() else None,
         subject=subject.strip() if isinstance(subject, str) else "",
     )

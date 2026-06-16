@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
 from app.core.config import get_settings
 from app.db.database import get_db_session
-from app.models import User
+from app.models import Department, User
 from app.schemas import Token, UserRead
 from app.services.audit_service import log_user_action
 from app.services.auth_service import (
@@ -17,20 +18,92 @@ from app.services.auth_service import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+ROLE_LABELS = {
+    "admin": "Администратор",
+    "operator": "Модератор",
+    "client": "Сотрудник отделения",
+}
 
-def user_to_schema(user: User) -> UserRead:
+
+def user_to_schema(
+    user: User,
+    department: Department | None = None,
+    moderator: User | None = None,
+) -> UserRead:
     return UserRead(
         id=user.id,
         username=user.username,
         email=user.email,
+        phone=user.phone,
         full_name=user.full_name,
         role=user.role,
+        role_label=ROLE_LABELS.get(user.role, user.role),
         department_id=user.department_id,
         client_id=user.client_id,
         is_active=user.is_active,
-        created_at=user.created_at,    
+        department=(
+            {
+                "id": department.id,
+                "code": department.code,
+                "name": department.name,
+                "region": department.region,
+                "department_type": department.department_type,
+                "full_path": department.full_path,
+            }
+            if department is not None
+            else None
+        ),
+        moderator=(
+            {
+                "id": moderator.id,
+                "username": moderator.username,
+                "full_name": moderator.full_name,
+                "email": moderator.email,
+                "phone": moderator.phone,
+                "role": moderator.role,
+            }
+            if moderator is not None
+            else None
+        ),
+        created_at=user.created_at,
         updated_at=user.updated_at,
     )
+
+
+async def find_nearest_moderator(
+    session: AsyncSession,
+    department: Department | None,
+) -> User | None:
+    if department is None:
+        return None
+
+    parent_id = department.parent_id
+    visited_department_ids: set[int] = set()
+
+    while parent_id is not None and parent_id not in visited_department_ids:
+        visited_department_ids.add(parent_id)
+
+        moderator_result = await session.execute(
+            select(User)
+            .where(
+                User.department_id == parent_id,
+                User.role == "operator",
+                User.is_active.is_(True),
+            )
+            .order_by(User.id)
+            .limit(1)
+        )
+        moderator = moderator_result.scalar_one_or_none()
+        if moderator is not None:
+            return moderator
+
+        department_result = await session.execute(
+            select(Department).where(Department.id == parent_id)
+        )
+        parent_department = department_result.scalar_one_or_none()
+        parent_id = parent_department.parent_id if parent_department is not None else None
+
+    return None
 
 
 @router.post("/login", response_model=Token, status_code=status.HTTP_200_OK)
@@ -168,5 +241,19 @@ def _invalid_login_exception() -> HTTPException:
 @router.get("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
 async def read_current_user(
     current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db_session),
 ) -> UserRead:
-    return user_to_schema(current_user)
+    department = None
+    if current_user.department_id is not None:
+        result = await session.execute(
+            select(Department).where(Department.id == current_user.department_id)
+        )
+        department = result.scalar_one_or_none()
+
+    moderator = await find_nearest_moderator(session=session, department=department)
+
+    return user_to_schema(
+        current_user,
+        department=department,
+        moderator=moderator,
+    )

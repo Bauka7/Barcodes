@@ -20,6 +20,7 @@ import ProfilePage from './pages/ProfilePage';
 const STAFF: Role[] = ['admin', 'operator'];
 const ADMIN: Role[] = ['admin'];
 const CLIENT: Role[] = ['client'];
+const ALL_ROLES: Role[] = ['admin', 'operator', 'client'];
 
 // Гейт по роли поверх общего гарда авторизации.
 function gated(roles: Role[], el: React.ReactNode) {
@@ -62,8 +63,10 @@ export default function App() {
         <Route path="/search" element={gated(STAFF, <SearchPage />)} />
         <Route path="/departments" element={gated(STAFF, <DepartmentsPage />)} />
 
+        {/* all roles */}
+        <Route path="/shpi-map" element={gated(ALL_ROLES, <ShpiMapPage />)} />
+
         {/* admin */}
-        <Route path="/shpi-map" element={gated(ADMIN, <ShpiMapPage />)} />
         <Route path="/users" element={gated(ADMIN, <UsersPage />)} />
         <Route path="/audit" element={gated(ADMIN, <AuditPage />)} />
         <Route path="/settings" element={gated(ADMIN, <SettingsPage />)} />

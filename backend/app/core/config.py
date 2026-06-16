@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     keycloak_username_claim: str = "preferred_username"
     keycloak_email_claim: str = "email"
     keycloak_full_name_claim: str = "name"
+    keycloak_phone_claim: str = "phone_number"
     keycloak_auto_create_users: bool = True
     keycloak_default_role: str = "client"
     local_admin_login_enabled: bool = True

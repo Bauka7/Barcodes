@@ -14,33 +14,58 @@ import { useDepartmentName } from '../lib/departmentName';
 const remainingOf = (r: BarcodeRangeRead): number =>
   r.status === 'active' ? Math.max(0, r.end_number - r.current_number + 1) : 0;
 
-const PRINT_LAYOUT_KEY = 'qazpost.printLayout';
-const LABEL_WIDTH = 126;
-const LABEL_HEIGHT = 71;
+const PRINT_LAYOUT_KEY = 'qazpost.printLayoutSettings';
+const LEGACY_PRINT_LAYOUT_KEY = 'qazpost.printLayout';
+const A4_WIDTH_MM = 210;
+const A4_HEIGHT_MM = 297;
+const LABEL_WIDTH_MM = 45;
+const LABEL_HEIGHT_MM = 25;
 
-interface PrintLayout {
-  marginLeft: number;
-  marginTop: number;
-  gapHorizontal: number;
-  gapVertical: number;
-  labelsPerRow: number;
-  rowsPerPage: number;
+interface PrintLayoutSettings {
+  offsetLeft: number;
+  offsetTop: number;
+  gapX: number;
+  gapY: number;
+  rows: number;
+  columns: number;
 }
 
-const DEFAULT_LAYOUT: PrintLayout = {
-  marginLeft: 0,
-  marginTop: 0,
-  gapHorizontal: 0,
-  gapVertical: 0,
-  labelsPerRow: 1,
-  rowsPerPage: 1,
+const DEFAULT_LAYOUT: PrintLayoutSettings = {
+  offsetLeft: 0,
+  offsetTop: 0,
+  gapX: 0,
+  gapY: 0,
+  rows: 1,
+  columns: 1,
 };
 
-const loadLayout = (): PrintLayout => {
+const normalizeLayout = (value: Partial<PrintLayoutSettings>): PrintLayoutSettings => ({
+  offsetLeft: clampNumber(Number(value.offsetLeft), 0, 120),
+  offsetTop: clampNumber(Number(value.offsetTop), 0, 120),
+  gapX: clampNumber(Number(value.gapX), 0, 120),
+  gapY: clampNumber(Number(value.gapY), 0, 120),
+  rows: clampNumber(Number(value.rows), 1, 5),
+  columns: clampNumber(Number(value.columns), 1, 4),
+});
+
+const fromLegacyLayout = (value: Record<string, unknown>): PrintLayoutSettings => ({
+  offsetLeft: Number(value.marginLeft ?? DEFAULT_LAYOUT.offsetLeft),
+  offsetTop: Number(value.marginTop ?? DEFAULT_LAYOUT.offsetTop),
+  gapX: Number(value.gapHorizontal ?? DEFAULT_LAYOUT.gapX),
+  gapY: Number(value.gapVertical ?? DEFAULT_LAYOUT.gapY),
+  rows: Number(value.rowsPerPage ?? DEFAULT_LAYOUT.rows),
+  columns: Number(value.labelsPerRow ?? DEFAULT_LAYOUT.columns),
+});
+
+const loadLayout = (): PrintLayoutSettings => {
   try {
     const raw = localStorage.getItem(PRINT_LAYOUT_KEY);
-    if (!raw) return DEFAULT_LAYOUT;
-    return { ...DEFAULT_LAYOUT, ...JSON.parse(raw) } as PrintLayout;
+    if (raw) return normalizeLayout({ ...DEFAULT_LAYOUT, ...JSON.parse(raw) });
+
+    const legacyRaw = localStorage.getItem(LEGACY_PRINT_LAYOUT_KEY);
+    if (legacyRaw) return normalizeLayout(fromLegacyLayout(JSON.parse(legacyRaw)));
+
+    return DEFAULT_LAYOUT;
   } catch {
     return DEFAULT_LAYOUT;
   }
@@ -48,6 +73,15 @@ const loadLayout = (): PrintLayout => {
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
+
+const toBackendPrintLayout = (layout: PrintLayoutSettings) => ({
+  offset_left: layout.offsetLeft,
+  offset_top: layout.offsetTop,
+  gap_x: layout.gapX,
+  gap_y: layout.gapY,
+  rows: layout.rows,
+  columns: layout.columns,
+});
 
 const CODE128_PATTERNS = [
   '212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312', '132212',
@@ -84,7 +118,7 @@ function Code128Preview({ value }: { value: string }) {
   const totalWidth = modules.reduce((sum, module) => sum + module.width, 0);
 
   return (
-    <svg viewBox={`0 0 ${totalWidth} 38`} className="h-[24px] w-[108px]" preserveAspectRatio="none">
+    <svg viewBox={`0 0 ${totalWidth} 38`} style={{ width: '38mm', height: '8mm' }} preserveAspectRatio="none">
       {modules.map((module, index) => {
         const currentX = x;
         x += module.width;
@@ -104,7 +138,7 @@ export default function MyRangesPage() {
   const rangesQ = useQuery({ queryKey: ['my-ranges'], queryFn: () => listMyRanges({ limit: 100 }) });
   const batchesQ = useQuery({ queryKey: ['my-batches'], queryFn: () => listMyBatches({ limit: 50 }) });
   const [previewBatchId, setPreviewBatchId] = useState<number | null>(null);
-  const [layout, setLayout] = useState<PrintLayout>(loadLayout);
+  const [layout, setLayout] = useState<PrintLayoutSettings>(loadLayout);
   const previewQ = useQuery({
     queryKey: ['my-batch-detail', previewBatchId],
     queryFn: () => getMyBatchDetail(previewBatchId ?? 0),
@@ -115,7 +149,7 @@ export default function MyRangesPage() {
     localStorage.setItem(PRINT_LAYOUT_KEY, JSON.stringify(layout));
   }, [layout]);
 
-  const updateLayout = (key: keyof PrintLayout, value: string, min: number, max: number) => {
+  const updateLayout = (key: keyof PrintLayoutSettings, value: string, min: number, max: number) => {
     setLayout((current) => ({
       ...current,
       [key]: clampNumber(Number(value), min, max),
@@ -124,22 +158,16 @@ export default function MyRangesPage() {
 
   const previewPages = useMemo(() => {
     const barcodes = previewQ.data?.barcodes ?? [];
-    const labelsPerPage = layout.labelsPerRow * layout.rowsPerPage;
+    const labelsPerPage = layout.columns * layout.rows;
     const pages = [];
     for (let i = 0; i < barcodes.length; i += labelsPerPage) {
       pages.push(barcodes.slice(i, i + labelsPerPage));
     }
     return pages;
-  }, [layout.labelsPerRow, layout.rowsPerPage, previewQ.data?.barcodes]);
+  }, [layout.columns, layout.rows, previewQ.data?.barcodes]);
 
-  const pageWidth =
-    layout.marginLeft * 2 +
-    layout.labelsPerRow * LABEL_WIDTH +
-    (layout.labelsPerRow - 1) * layout.gapHorizontal;
-  const pageHeight =
-    layout.marginTop * 2 +
-    layout.rowsPerPage * LABEL_HEIGHT +
-    (layout.rowsPerPage - 1) * layout.gapVertical;
+  const pageWidth = A4_WIDTH_MM;
+  const pageHeight = A4_HEIGHT_MM;
   const previewDepartmentName =
     previewQ.data?.department_id != null ? deptName(previewQ.data.department_id) : 'KazPost';
 
@@ -164,7 +192,8 @@ export default function MyRangesPage() {
   });
 
   const print = useMutation({
-    mutationFn: (batchId: number) => printBatchPdf(batchId, {}),
+    mutationFn: (batchId: number) =>
+      printBatchPdf(batchId, { print_layout: toBackendPrintLayout(layout) }),
     onSuccess: (blob) => {
       openBlob(blob);
       qc.invalidateQueries({ queryKey: ['my-batches'] });
@@ -351,41 +380,44 @@ export default function MyRangesPage() {
 
             <div className="grid min-h-0 flex-1 grid-cols-[300px_1fr]">
               <aside className="overflow-auto border-r-[0.5px] border-bd2 p-4">
+                <p className="mb-3 text-[14px] text-t2">
+                  Настройки сохраняются автоматически и применяются к PDF.
+                </p>
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="Слева">
+                  <Field label="Слева, мм">
                     <Input
                       type="number"
                       min={0}
                       max={120}
-                      value={layout.marginLeft}
-                      onChange={(e) => updateLayout('marginLeft', e.target.value, 0, 120)}
+                      value={layout.offsetLeft}
+                      onChange={(e) => updateLayout('offsetLeft', e.target.value, 0, 120)}
                     />
                   </Field>
-                  <Field label="Сверху">
+                  <Field label="Сверху, мм">
                     <Input
                       type="number"
                       min={0}
                       max={120}
-                      value={layout.marginTop}
-                      onChange={(e) => updateLayout('marginTop', e.target.value, 0, 120)}
+                      value={layout.offsetTop}
+                      onChange={(e) => updateLayout('offsetTop', e.target.value, 0, 120)}
                     />
                   </Field>
-                  <Field label="Горизонт.">
+                  <Field label="Горизонт., мм">
                     <Input
                       type="number"
                       min={0}
                       max={120}
-                      value={layout.gapHorizontal}
-                      onChange={(e) => updateLayout('gapHorizontal', e.target.value, 0, 120)}
+                      value={layout.gapX}
+                      onChange={(e) => updateLayout('gapX', e.target.value, 0, 120)}
                     />
                   </Field>
-                  <Field label="Вертик.">
+                  <Field label="Вертик., мм">
                     <Input
                       type="number"
                       min={0}
                       max={120}
-                      value={layout.gapVertical}
-                      onChange={(e) => updateLayout('gapVertical', e.target.value, 0, 120)}
+                      value={layout.gapY}
+                      onChange={(e) => updateLayout('gapY', e.target.value, 0, 120)}
                     />
                   </Field>
                   <Field label="Рядов">
@@ -393,8 +425,8 @@ export default function MyRangesPage() {
                       type="number"
                       min={1}
                       max={5}
-                      value={layout.rowsPerPage}
-                      onChange={(e) => updateLayout('rowsPerPage', e.target.value, 1, 5)}
+                      value={layout.rows}
+                      onChange={(e) => updateLayout('rows', e.target.value, 1, 5)}
                     />
                   </Field>
                   <Field label="В ряд">
@@ -402,8 +434,8 @@ export default function MyRangesPage() {
                       type="number"
                       min={1}
                       max={4}
-                      value={layout.labelsPerRow}
-                      onChange={(e) => updateLayout('labelsPerRow', e.target.value, 1, 4)}
+                      value={layout.columns}
+                      onChange={(e) => updateLayout('columns', e.target.value, 1, 4)}
                     />
                   </Field>
                 </div>
@@ -433,24 +465,29 @@ export default function MyRangesPage() {
                         <div className="mb-1 text-[13px] text-t3">Страница {pageIndex + 1}</div>
                         <div
                           className="relative border-[0.5px] border-bd3 bg-white text-black"
-                          style={{ width: pageWidth, height: pageHeight }}
+                          style={{ width: `${pageWidth}mm`, height: `${pageHeight}mm` }}
                         >
                           {page.map((item, index) => {
-                            const row = Math.floor(index / layout.labelsPerRow);
-                            const col = index % layout.labelsPerRow;
-                            const left = layout.marginLeft + col * (LABEL_WIDTH + layout.gapHorizontal);
-                            const top = layout.marginTop + row * (LABEL_HEIGHT + layout.gapVertical);
+                            const row = Math.floor(index / layout.columns);
+                            const col = index % layout.columns;
+                            const left = layout.offsetLeft + col * (LABEL_WIDTH_MM + layout.gapX);
+                            const top = layout.offsetTop + row * (LABEL_HEIGHT_MM + layout.gapY);
                             return (
                               <div
                                 key={item.id}
-                                className="absolute flex flex-col items-center justify-between overflow-hidden border-[0.5px] border-dashed border-zinc-300 bg-white px-1 py-1"
-                                style={{ left, top, width: LABEL_WIDTH, height: LABEL_HEIGHT }}
+                                className="absolute flex flex-col items-center justify-between overflow-hidden border-[0.5px] border-dashed border-zinc-300 bg-white px-[1mm] py-[1mm]"
+                                style={{
+                                  left: `${left}mm`,
+                                  top: `${top}mm`,
+                                  width: `${LABEL_WIDTH_MM}mm`,
+                                  height: `${LABEL_HEIGHT_MM}mm`,
+                                }}
                               >
-                                <div className="max-w-full truncate text-[8px] leading-none">
+                                <div className="max-w-full truncate text-[5.5pt] leading-none">
                                   {previewDepartmentName}
                                 </div>
                                 <Code128Preview value={item.barcode} />
-                                <div className="max-w-full truncate font-mono text-[10px] leading-none">
+                                <div className="max-w-full truncate font-mono text-[6.2pt] leading-none">
                                   {item.barcode}
                                 </div>
                               </div>

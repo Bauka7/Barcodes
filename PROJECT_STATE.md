@@ -21,7 +21,7 @@ The backend currently supports:
 - Legacy clients API, range requests, and barcode range allocation foundation.
 - SHPI generation from allocated barcode ranges.
 - Individual barcode lifecycle tracking.
-- Admin-only SHPI Map for monitoring counters by SHPI code and region.
+- SHPI Map for monitoring counters by SHPI code and region.
 
 The backend intentionally does not include:
 
@@ -228,6 +228,8 @@ Fields:
 - `id`
 - `username`
 - `hashed_password`
+- `email`
+- `phone`
 - `full_name`
 - `role`
 - `department_id`
@@ -743,7 +745,7 @@ Enterprise auth foundation:
 - `AUTH_MODE=hybrid` accepts local JWT and external JWT when Keycloak JWKS is configured.
 - Keycloak identifies users; QazPostWeb local database controls SHPI roles and department permissions.
 - External JWT roles do not replace local QazPostWeb roles.
-- Valid external users are resolved locally by username or email. If missing and `KEYCLOAK_AUTO_CREATE_USERS=true`, QazPostWeb creates an active passwordless local profile with `KEYCLOAK_DEFAULT_ROLE` (`client` by default). Admin can later change role and assign department/client ownership from the Users page.
+- Valid external users are resolved locally by username or email. If missing and `KEYCLOAK_AUTO_CREATE_USERS=true`, QazPostWeb creates a passwordless local profile with Keycloak `email`, `name`, and optional `phone_number` claims, `KEYCLOAK_DEFAULT_ROLE` (`client` by default), `department_id = null`, and `is_active = false`. Login returns 403 until a QazPostWeb admin activates the user and assigns role/department permissions from the Users page.
 - External users may have `hashed_password = null`.
 - In Keycloak mode, local password login is reserved for the local admin fallback when `LOCAL_ADMIN_LOGIN_ENABLED=true`.
 
@@ -763,6 +765,7 @@ Settings:
 - `KEYCLOAK_USERNAME_CLAIM`, default `preferred_username`
 - `KEYCLOAK_EMAIL_CLAIM`, default `email`
 - `KEYCLOAK_FULL_NAME_CLAIM`, default `name`
+- `KEYCLOAK_PHONE_CLAIM`, default `phone_number`
 - `KEYCLOAK_AUTO_CREATE_USERS`, default `true`
 - `KEYCLOAK_DEFAULT_ROLE`, default `client`
 - `LOCAL_ADMIN_LOGIN_ENABLED`, default `true`

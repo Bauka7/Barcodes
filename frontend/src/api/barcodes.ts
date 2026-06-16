@@ -59,6 +59,14 @@ export function previewBatchPdf(batchId: number): Promise<Blob> {
 export interface PrintBatchInput {
   printer_name?: string;
   notes?: string;
+  print_layout?: {
+    offset_left: number;
+    offset_top: number;
+    gap_x: number;
+    gap_y: number;
+    rows: number;
+    columns: number;
+  };
 }
 // POST .../pdf — printed_by НЕ слать; помечает партию напечатанной.
 export function printBatchPdf(batchId: number, input: PrintBatchInput): Promise<Blob> {

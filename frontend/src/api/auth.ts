@@ -11,11 +11,30 @@ export interface LoginResponse {
 export interface Me {
   id: number;
   username: string;
+  email: string | null;
+  phone: string | null;
   full_name: string | null;
   role: Role;
+  role_label: string;
   department_id: number | null;
   client_id: number | null;
   is_active: boolean;
+  department: {
+    id: number;
+    code: string;
+    name: string;
+    region: string | null;
+    department_type: string | null;
+    full_path: string | null;
+  } | null;
+  moderator: {
+    id: number;
+    username: string;
+    full_name: string | null;
+    email: string | null;
+    phone: string | null;
+    role: Role;
+  } | null;
 }
 
 // POST /api/auth/login — тело form-urlencoded (НЕ JSON), без Bearer.

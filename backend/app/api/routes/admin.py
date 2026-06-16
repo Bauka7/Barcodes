@@ -17,7 +17,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 )
 async def get_admin_shpi_map(
     session: AsyncSession = Depends(get_db_session),
-    current_user: User = Depends(require_roles("admin")),
+    current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> ShpiMapResponse:
     data = await get_shpi_map(session=session)
     return ShpiMapResponse.model_validate(data)

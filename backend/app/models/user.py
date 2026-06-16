@@ -20,6 +20,7 @@ class User(TimestampMixin, Base):
     username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
     department_id: Mapped[int | None] = mapped_column(

@@ -4,7 +4,7 @@ FastAPI backend for a KazPost-style barcode generation system.
 
 The project currently includes the application scaffold, async database setup, migrations, seed data, and barcode number generation endpoints.
 
-It also includes authentication, roles, audit logging, legacy clients API, range requests, barcode range allocation, SHPI generation from allocated ranges, individual SHPI lifecycle tracking, and an admin-only SHPI Map for counter monitoring by code and region.
+It also includes authentication, roles, audit logging, legacy clients API, range requests, barcode range allocation, SHPI generation from allocated ranges, individual SHPI lifecycle tracking, and a SHPI Map for counter monitoring by code and region.
 
 ## Requirements
 
@@ -63,10 +63,11 @@ External identity provider integration follows this split:
 - QazPostWeb local database stores SHPI permissions.
 - `users.role`, `users.department_id`, `users.client_id`, and `users.is_active` remain the source of authorization.
 - External JWT roles do not replace QazPostWeb roles yet.
-- If a Keycloak user is missing locally and `KEYCLOAK_AUTO_CREATE_USERS=true`, QazPostWeb creates an active passwordless local profile with `KEYCLOAK_DEFAULT_ROLE` (`client` by default).
+- If a Keycloak user is missing locally and `KEYCLOAK_AUTO_CREATE_USERS=true`, QazPostWeb creates a passwordless local profile with Keycloak `email`, `name`, and optional `phone_number` claims, `KEYCLOAK_DEFAULT_ROLE` (`client` by default), `department_id = null`, and `is_active = false`.
+- The first login for an auto-created user returns 403 until a QazPostWeb admin activates the user and assigns the role/department in the Users page.
 - In Keycloak mode, local password login is reserved for the local admin fallback when `LOCAL_ADMIN_LOGIN_ENABLED=true`.
 
-External users do not need to exist in QazPostWeb before first login when auto-create is enabled. The first successful Keycloak authentication registers the local profile and allows login. A QazPostWeb admin can later change role and assign department/client ownership from the Users page.
+External users do not need to exist in QazPostWeb before first login when auto-create is enabled. The first successful Keycloak authentication registers the local profile, but does not grant access yet. A QazPostWeb admin must activate the user and assign department permissions from the Users page.
 
 Safe production-style example:
 
@@ -79,6 +80,7 @@ KEYCLOAK_CLIENT_ID=qazpost-web
 KEYCLOAK_CLIENT_SECRET=
 KEYCLOAK_SCOPE=openid profile email
 KEYCLOAK_AUDIENCE=qazpost-web
+KEYCLOAK_PHONE_CLAIM=phone_number
 KEYCLOAK_AUTO_CREATE_USERS=true
 KEYCLOAK_DEFAULT_ROLE=client
 LOCAL_ADMIN_LOGIN_ENABLED=true

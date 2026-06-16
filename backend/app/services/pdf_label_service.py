@@ -2,6 +2,8 @@ from io import BytesIO
 import os
 from pathlib import Path
 
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
 from reportlab.graphics.barcode import code128
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -10,10 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Department, GeneratedBarcode, GeneratedBatch
+from app.schemas.print import PrintLayoutSettings
 from app.services.print_tracking_service import create_printed_batch
 
-LABEL_WIDTH = 126
-LABEL_HEIGHT = 71
+LABEL_WIDTH_MM = 45
+LABEL_HEIGHT_MM = 25
+LABEL_WIDTH = LABEL_WIDTH_MM * mm
+LABEL_HEIGHT = LABEL_HEIGHT_MM * mm
 UNICODE_FONT_NAME = "DejaVuSans"
 UNICODE_FONT_FILE_NAME = "DejaVuSans.ttf"
 FONT_PATH_ENV_VAR = "DEJAVU_SANS_FONT_PATH"
@@ -29,6 +34,14 @@ DEFAULT_FONT_PATHS = (
 
 class GeneratedBatchNotFoundError(LookupError):
     pass
+
+
+def _layout_or_default(layout: PrintLayoutSettings | None) -> PrintLayoutSettings:
+    return layout or PrintLayoutSettings()
+
+
+def _mm_to_points(value: float) -> float:
+    return value * mm
 
 
 def _find_unicode_font_path() -> Path:
@@ -116,15 +129,15 @@ def _draw_centered_text(
 def _draw_barcode(pdf: canvas.Canvas, barcode_value: str) -> None:
     barcode = code128.Code128(
         barcode_value,
-        barHeight=18,
-        barWidth=0.48,
+        barHeight=8 * mm,
+        barWidth=0.34,
         humanReadable=False,
     )
     max_width = LABEL_WIDTH - 8
     scale = min(1.0, max_width / barcode.width)
     barcode_width = barcode.width * scale
     x = (LABEL_WIDTH - barcode_width) / 2
-    y = 25
+    y = 8 * mm
 
     pdf.saveState()
     pdf.translate(x, y)
@@ -133,21 +146,59 @@ def _draw_barcode(pdf: canvas.Canvas, barcode_value: str) -> None:
     pdf.restoreState()
 
 
+def _draw_label(
+    pdf: canvas.Canvas,
+    generated_barcode: GeneratedBarcode,
+    department_name: str,
+    font_name: str,
+    x: float,
+    y_top: float,
+    page_height: float,
+) -> None:
+    y = page_height - y_top - LABEL_HEIGHT
+    pdf.saveState()
+    pdf.translate(x, y)
+    pdf.setFillColorRGB(0, 0, 0)
+    _draw_centered_text(pdf, department_name, LABEL_HEIGHT - 8, font_name, 5.5, LABEL_WIDTH - 6)
+    _draw_barcode(pdf, generated_barcode.barcode)
+    _draw_centered_text(pdf, generated_barcode.barcode, 4, font_name, 6.2, LABEL_WIDTH - 6)
+    pdf.restoreState()
+
+
 def generate_labels_pdf_bytes(
     batch: GeneratedBatch,
     barcodes: list[GeneratedBarcode],
     department_name: str,
+    print_layout: PrintLayoutSettings | None = None,
 ) -> bytes:
     font_name = register_pdf_fonts()
+    layout = _layout_or_default(print_layout)
+    offset_left = _mm_to_points(layout.offset_left)
+    offset_top = _mm_to_points(layout.offset_top)
+    gap_x = _mm_to_points(layout.gap_x)
+    gap_y = _mm_to_points(layout.gap_y)
+    labels_per_page = layout.rows * layout.columns
+    page_width, page_height = A4
     buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=(LABEL_WIDTH, LABEL_HEIGHT))
+    pdf = canvas.Canvas(buffer, pagesize=(page_width, page_height))
 
     label_department_name = department_name or "KazPost"
-    for generated_barcode in barcodes:
-        pdf.setFillColorRGB(0, 0, 0)
-        _draw_centered_text(pdf, label_department_name, 60, font_name, 6.5, LABEL_WIDTH - 8)
-        _draw_barcode(pdf, generated_barcode.barcode)
-        _draw_centered_text(pdf, generated_barcode.barcode, 6, font_name, 8.2, LABEL_WIDTH - 8)
+    for start in range(0, len(barcodes), labels_per_page):
+        page_barcodes = barcodes[start : start + labels_per_page]
+        for index, generated_barcode in enumerate(page_barcodes):
+            row = index // layout.columns
+            column = index % layout.columns
+            x = offset_left + column * (LABEL_WIDTH + gap_x)
+            y_top = offset_top + row * (LABEL_HEIGHT + gap_y)
+            _draw_label(
+                pdf=pdf,
+                generated_barcode=generated_barcode,
+                department_name=label_department_name,
+                font_name=font_name,
+                x=x,
+                y_top=y_top,
+                page_height=page_height,
+            )
         pdf.showPage()
 
     pdf.save()
@@ -157,6 +208,7 @@ def generate_labels_pdf_bytes(
 async def generate_batch_pdf_preview(
     session: AsyncSession,
     batch_id: int,
+    print_layout: PrintLayoutSettings | None = None,
 ) -> bytes:
     batch, barcodes, department_name = await _load_batch_and_barcodes(
         session=session,
@@ -166,6 +218,7 @@ async def generate_batch_pdf_preview(
         batch=batch,
         barcodes=barcodes,
         department_name=department_name,
+        print_layout=print_layout,
     )
 
 
@@ -175,6 +228,7 @@ async def generate_batch_pdf_and_track_print(
     printed_by: str | None = None,
     printer_name: str | None = None,
     notes: str | None = None,
+    print_layout: PrintLayoutSettings | None = None,
 ) -> bytes:
     async with session.begin():
         batch, barcodes, department_name = await _load_batch_and_barcodes(
@@ -185,6 +239,7 @@ async def generate_batch_pdf_and_track_print(
             batch=batch,
             barcodes=barcodes,
             department_name=department_name,
+            print_layout=print_layout,
         )
         await create_printed_batch(
             session=session,

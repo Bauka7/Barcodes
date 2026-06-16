@@ -25,7 +25,7 @@ Implemented:
 - Audit logging for important user actions.
 - Legacy clients API, range requests, barcode range allocation, and SHPI generation from allocated ranges.
 - Individual barcode lifecycle tracking.
-- Admin-only SHPI Map for monitoring counters by code and region.
+- SHPI Map for monitoring counters by code and region.
 - Frontend MVP for login, departments, generation, history, search, PDF preview/download, and print history.
 
 Not implemented yet:
@@ -220,7 +220,7 @@ QazPostWeb supports backend auth modes:
 - `AUTH_MODE=external` or `AUTH_MODE=keycloak`: users enter their Keycloak username/password in the normal QazPostWeb login form. The backend exchanges credentials with Keycloak, validates the returned JWT, then resolves the local QazPostWeb user by username/email.
 - `AUTH_MODE=hybrid`: migration mode. Existing local JWT tokens still work, and external Keycloak JWT tokens are accepted when JWKS is configured.
 
-Keycloak answers who the user is. QazPostWeb still answers what the user can do inside the SHPI system. After an external JWT is validated, the backend resolves the local QazPostWeb user by username, then email. If the user does not exist locally and `KEYCLOAK_AUTO_CREATE_USERS=true`, QazPostWeb creates an active passwordless local profile with `KEYCLOAK_DEFAULT_ROLE` (`client` by default). The local `users.role`, `users.department_id`, `users.client_id`, and `users.is_active` continue to control permissions and department ownership.
+Keycloak answers who the user is. QazPostWeb still answers what the user can do inside the SHPI system. After an external JWT is validated, the backend resolves the local QazPostWeb user by username, then email. If the user does not exist locally and `KEYCLOAK_AUTO_CREATE_USERS=true`, QazPostWeb creates a passwordless local profile with Keycloak `email`, `name`, and optional `phone_number` claims, `KEYCLOAK_DEFAULT_ROLE` (`client` by default), `department_id = null`, and `is_active = false`. The first login returns 403 until a QazPostWeb admin activates the user and assigns the role/department in the Users page. The local `users.role`, `users.department_id`, `users.client_id`, and `users.is_active` continue to control permissions and department ownership.
 
 In Keycloak mode, local username/password login is reserved for the local admin fallback when `LOCAL_ADMIN_LOGIN_ENABLED=true`. Ordinary users authenticate with Keycloak; a QazPostWeb admin can later change their role and assign department/client ownership from the Users page.
 
@@ -235,6 +235,7 @@ KEYCLOAK_CLIENT_ID=qazpost-web
 KEYCLOAK_CLIENT_SECRET=
 KEYCLOAK_SCOPE=openid profile email
 KEYCLOAK_AUDIENCE=qazpost-web
+KEYCLOAK_PHONE_CLAIM=phone_number
 KEYCLOAK_AUTO_CREATE_USERS=true
 KEYCLOAK_DEFAULT_ROLE=client
 LOCAL_ADMIN_LOGIN_ENABLED=true

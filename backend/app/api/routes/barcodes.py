@@ -685,6 +685,7 @@ async def print_batch_pdf(
             printed_by=current_user.username if current_user else payload.printed_by,
             printer_name=payload.printer_name,
             notes=payload.notes,
+            print_layout=payload.print_layout,
         )
     except GeneratedBatchNotFoundError as error:
         raise HTTPException(
