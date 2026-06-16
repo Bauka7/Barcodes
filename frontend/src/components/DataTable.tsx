@@ -17,6 +17,8 @@ interface Props<T> {
   rowClassName?: (row: T) => string;
   empty?: ReactNode;
   loading?: boolean;
+  containerClassName?: string;
+  tableClassName?: string;
 }
 
 const alignCls = (align?: 'left' | 'right') => (align === 'right' ? 'text-right' : 'text-left');
@@ -30,10 +32,12 @@ export function DataTable<T>({
   rowClassName,
   empty,
   loading,
+  containerClassName,
+  tableClassName,
 }: Props<T>) {
   return (
-    <div className="overflow-hidden rounded-ctl border-[0.5px] border-bd3">
-      <table className="w-full border-collapse text-[16px]">
+    <div className={`overflow-x-auto overflow-y-visible rounded-ctl border-[0.5px] border-bd3 ${containerClassName ?? ''}`}>
+      <table className={`min-w-full border-collapse text-[16px] ${tableClassName ?? ''}`}>
         <thead>
           <tr>
             {columns.map((c) => (
