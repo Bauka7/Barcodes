@@ -739,12 +739,13 @@ Auth uses JWT bearer access tokens.
 Enterprise auth foundation:
 
 - `AUTH_MODE=local` keeps the existing local username/password login and QazPostWeb JWT.
-- `AUTH_MODE=external` accepts only external Keycloak JWT bearer tokens for protected APIs.
+- `AUTH_MODE=external` or `AUTH_MODE=keycloak` lets users enter Keycloak username/password in the normal QazPostWeb login form. The backend exchanges credentials with Keycloak, validates the returned JWT, and resolves the local QazPostWeb user.
 - `AUTH_MODE=hybrid` accepts local JWT and external JWT when Keycloak JWKS is configured.
 - Keycloak identifies users; QazPostWeb local database controls SHPI roles and department permissions.
 - External JWT roles do not replace local QazPostWeb roles.
-- Valid external users must already exist locally by username or email; missing local users receive `403`.
+- Valid external users are resolved locally by username or email. If missing and `KEYCLOAK_AUTO_CREATE_USERS=true`, QazPostWeb creates an active passwordless local profile with `KEYCLOAK_DEFAULT_ROLE` (`client` by default). Admin can later change role and assign department/client ownership from the Users page.
 - External users may have `hashed_password = null`.
+- In Keycloak mode, local password login is reserved for the local admin fallback when `LOCAL_ADMIN_LOGIN_ENABLED=true`.
 
 Settings:
 
@@ -753,11 +754,18 @@ Settings:
 - `ALGORITHM`, default `HS256`
 - `AUTH_MODE`, default `local`
 - `KEYCLOAK_ISSUER_URI`
+- `KEYCLOAK_TOKEN_URL`
 - `KEYCLOAK_JWKS_URL`
+- `KEYCLOAK_CLIENT_ID`
+- `KEYCLOAK_CLIENT_SECRET`
+- `KEYCLOAK_SCOPE`, default `openid profile email`
 - `KEYCLOAK_AUDIENCE`
 - `KEYCLOAK_USERNAME_CLAIM`, default `preferred_username`
 - `KEYCLOAK_EMAIL_CLAIM`, default `email`
 - `KEYCLOAK_FULL_NAME_CLAIM`, default `name`
+- `KEYCLOAK_AUTO_CREATE_USERS`, default `true`
+- `KEYCLOAK_DEFAULT_ROLE`, default `client`
+- `LOCAL_ADMIN_LOGIN_ENABLED`, default `true`
 - `APP_CONTEXT_PATH`
 - `SERVER_PORT`
 - `CORS_ORIGINS`

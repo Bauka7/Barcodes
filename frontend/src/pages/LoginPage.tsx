@@ -14,7 +14,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const ssoLoginEnabled = import.meta.env.VITE_SSO_LOGIN_ENABLED === 'true';
 
   // после входа — на стартовую по роли через HomeRedirect ('/'):
   // staff → Генерация, client → Мои диапазоны. Так никто не упирается в «Нет доступа».
@@ -89,16 +88,6 @@ export default function LoginPage() {
         >
           {busy ? t('login.submitting') : t('login.submit')}
         </button>
-
-        {ssoLoginEnabled && (
-          <button
-            type="button"
-            disabled
-            className="mt-2 flex w-full items-center justify-center rounded-ctl border-[0.5px] border-bd2 bg-bg1 px-3 py-2 text-[16px] text-t1 disabled:opacity-60"
-          >
-            {t('login.sso')}
-          </button>
-        )}
 
         <div className="mt-4 flex justify-center">
           <LangSwitch />

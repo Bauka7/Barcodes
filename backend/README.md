@@ -54,7 +54,7 @@ For local development, `.env.example` includes a placeholder `SECRET_KEY`. In pr
 Backend auth modes:
 
 - `AUTH_MODE=local`: keeps the current local username/password login and local QazPostWeb JWT.
-- `AUTH_MODE=external`: accepts only external Keycloak JWT bearer tokens on protected APIs.
+- `AUTH_MODE=external` or `AUTH_MODE=keycloak`: users enter their Keycloak username/password in the normal login form. The backend exchanges credentials with Keycloak, validates the returned JWT, and resolves the local QazPostWeb user.
 - `AUTH_MODE=hybrid`: accepts local JWT and, when configured, external Keycloak JWT.
 
 External identity provider integration follows this split:
@@ -63,16 +63,25 @@ External identity provider integration follows this split:
 - QazPostWeb local database stores SHPI permissions.
 - `users.role`, `users.department_id`, `users.client_id`, and `users.is_active` remain the source of authorization.
 - External JWT roles do not replace QazPostWeb roles yet.
+- If a Keycloak user is missing locally and `KEYCLOAK_AUTO_CREATE_USERS=true`, QazPostWeb creates an active passwordless local profile with `KEYCLOAK_DEFAULT_ROLE` (`client` by default).
+- In Keycloak mode, local password login is reserved for the local admin fallback when `LOCAL_ADMIN_LOGIN_ENABLED=true`.
 
-External users must already exist in QazPostWeb. The backend resolves them by username, then email. If a valid external token belongs to a user that is not registered locally, the API returns `403`.
+External users do not need to exist in QazPostWeb before first login when auto-create is enabled. The first successful Keycloak authentication registers the local profile and allows login. A QazPostWeb admin can later change role and assign department/client ownership from the Users page.
 
 Safe production-style example:
 
 ```text
 AUTH_MODE=external
 KEYCLOAK_ISSUER_URI=https://keycloak.example.kz/auth/realms/qazpost
+KEYCLOAK_TOKEN_URL=https://keycloak.example.kz/auth/realms/qazpost/protocol/openid-connect/token
 KEYCLOAK_JWKS_URL=https://keycloak.example.kz/auth/realms/qazpost/protocol/openid-connect/certs
+KEYCLOAK_CLIENT_ID=qazpost-web
+KEYCLOAK_CLIENT_SECRET=
+KEYCLOAK_SCOPE=openid profile email
 KEYCLOAK_AUDIENCE=qazpost-web
+KEYCLOAK_AUTO_CREATE_USERS=true
+KEYCLOAK_DEFAULT_ROLE=client
+LOCAL_ADMIN_LOGIN_ENABLED=true
 DATABASE_URL=postgresql+asyncpg://user:changeme@postgres.example.kz:5432/qazpost
 CORS_ORIGINS=https://qazpost-web.example.kz
 ```

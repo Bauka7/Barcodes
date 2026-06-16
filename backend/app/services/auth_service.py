@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -12,12 +13,15 @@ from app.db.database import get_db_session
 from app.models import Client, Department, User
 from app.schemas import UserCreate, UserUpdate
 from app.services.external_auth_service import (
+    ExternalTokenResponse,
     ExternalAuthConfigurationError,
     external_auth_is_configured,
+    login_with_external_password,
     validate_external_token,
 )
 
 VALID_ROLES = {"admin", "operator", "client"}
+EXTERNAL_AUTH_MODES = {"external", "keycloak"}
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -198,6 +202,23 @@ async def update_user(
     return user
 
 
+async def authenticate_local_admin(
+    session: AsyncSession,
+    username: str,
+    password: str,
+) -> User | None:
+    user = await authenticate_user(
+        session=session,
+        username=username,
+        password=password,
+    )
+
+    if user is None or user.role != "admin":
+        return None
+
+    return user
+
+
 def _credentials_exception() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -226,6 +247,111 @@ async def _get_current_user_from_local_token(
     return user
 
 
+async def _get_current_admin_from_local_token(
+    token: str,
+    session: AsyncSession,
+) -> User:
+    user = await _get_current_user_from_local_token(token=token, session=session)
+    if user.role != "admin":
+        raise _credentials_exception()
+    return user
+
+
+async def _resolve_external_user(
+    session: AsyncSession,
+    username: str,
+    email: str | None,
+    full_name: str | None = None,
+) -> User:
+    user = await get_user_by_username(
+        session=session,
+        username=username,
+    )
+    if user is None and email:
+        user = await get_user_by_email(session=session, email=email)
+
+    if user is None:
+        settings = get_settings()
+        if not settings.keycloak_auto_create_users:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "User exists in external identity provider but is not registered "
+                    "in QazPostWeb."
+                ),
+            )
+
+        try:
+            role = validate_role(settings.keycloak_default_role)
+        except ValueError as error:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="KEYCLOAK_DEFAULT_ROLE must be one of: admin, operator, client.",
+            ) from error
+
+        user = User(
+            username=username,
+            hashed_password=None,
+            email=email,
+            full_name=full_name,
+            role=role,
+            department_id=None,
+            client_id=None,
+            is_active=True,
+        )
+        session.add(user)
+        try:
+            await session.flush()
+        except IntegrityError:
+            await session.rollback()
+            user = await get_user_by_username(session=session, username=username)
+            if user is None and email:
+                user = await get_user_by_email(session=session, email=email)
+            if user is None:
+                raise
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is inactive in QazPostWeb.",
+        )
+
+    return user
+
+
+async def authenticate_external_password(
+    session: AsyncSession,
+    username: str,
+    password: str,
+) -> tuple[ExternalTokenResponse, User]:
+    settings = get_settings()
+    try:
+        token = await login_with_external_password(
+            settings=settings,
+            username=username,
+            password=password,
+        )
+        external_user = await validate_external_token(
+            token=token.access_token,
+            settings=settings,
+        )
+    except ExternalAuthConfigurationError as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(error),
+        ) from error
+    except JWTError as error:
+        raise _credentials_exception() from error
+
+    user = await _resolve_external_user(
+        session=session,
+        username=external_user.username,
+        email=external_user.email,
+        full_name=external_user.full_name,
+    )
+    return token, user
+
+
 async def _get_current_user_from_external_token(
     token: str,
     session: AsyncSession,
@@ -241,29 +367,12 @@ async def _get_current_user_from_external_token(
     except JWTError as error:
         raise _credentials_exception() from error
 
-    user = await get_user_by_username(
+    return await _resolve_external_user(
         session=session,
         username=external_user.username,
+        email=external_user.email,
+        full_name=external_user.full_name,
     )
-    if user is None and external_user.email:
-        user = await get_user_by_email(session=session, email=external_user.email)
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=(
-                "User exists in external identity provider but is not registered "
-                "in QazPostWeb."
-            ),
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User is inactive in QazPostWeb.",
-        )
-
-    return user
 
 
 async def get_current_user(
@@ -275,8 +384,21 @@ async def get_current_user(
     if auth_mode == "local":
         return await _get_current_user_from_local_token(token=token, session=session)
 
-    if auth_mode == "external":
-        return await _get_current_user_from_external_token(token=token, session=session)
+    if auth_mode in EXTERNAL_AUTH_MODES:
+        try:
+            return await _get_current_user_from_external_token(
+                token=token,
+                session=session,
+            )
+        except HTTPException as external_error:
+            if external_error.status_code == status.HTTP_403_FORBIDDEN:
+                raise external_error
+            if not get_settings().local_admin_login_enabled:
+                raise external_error
+            return await _get_current_admin_from_local_token(
+                token=token,
+                session=session,
+            )
 
     if auth_mode == "hybrid":
         try:
@@ -291,7 +413,7 @@ async def get_current_user(
 
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="AUTH_MODE must be one of: local, external, hybrid.",
+        detail="AUTH_MODE must be one of: local, external, keycloak, hybrid.",
     )
 
 

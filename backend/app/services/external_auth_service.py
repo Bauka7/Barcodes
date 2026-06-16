@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+import asyncio
 import json
-from urllib.error import URLError
-from urllib.request import urlopen
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from jose import JWTError, jwt
 
@@ -21,6 +23,13 @@ class ExternalUserClaims:
     email: str | None
     full_name: str | None
     subject: str
+
+
+@dataclass(slots=True)
+class ExternalTokenResponse:
+    access_token: str
+    token_type: str
+    expires_in: int | None = None
 
 
 def external_auth_is_configured(settings: Settings) -> bool:
@@ -45,6 +54,81 @@ def _load_jwks(url: str) -> dict[str, object]:
 
     JWKS_CACHE[url] = data
     return data
+
+
+def _request_keycloak_token(
+    settings: Settings,
+    username: str,
+    password: str,
+) -> dict[str, object]:
+    token_url = settings.keycloak_token_url.strip()
+    client_id = settings.keycloak_client_id.strip()
+    if not token_url:
+        raise ExternalAuthConfigurationError("KEYCLOAK_TOKEN_URL is not configured.")
+    if not client_id:
+        raise ExternalAuthConfigurationError("KEYCLOAK_CLIENT_ID is not configured.")
+
+    form_data = {
+        "grant_type": "password",
+        "client_id": client_id,
+        "username": username,
+        "password": password,
+    }
+    client_secret = settings.keycloak_client_secret.strip()
+    if client_secret:
+        form_data["client_secret"] = client_secret
+
+    scope = settings.keycloak_scope.strip()
+    if scope:
+        form_data["scope"] = scope
+
+    request = Request(
+        token_url,
+        data=urlencode(form_data).encode("utf-8"),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+
+    try:
+        with urlopen(request, timeout=10) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        if error.code in {400, 401}:
+            raise JWTError("Invalid external username or password.") from error
+        raise ExternalAuthConfigurationError(
+            f"Keycloak token endpoint returned HTTP {error.code}."
+        ) from error
+    except (OSError, URLError, json.JSONDecodeError) as error:
+        raise ExternalAuthConfigurationError(
+            "Could not request token from Keycloak token endpoint."
+        ) from error
+
+
+async def login_with_external_password(
+    settings: Settings,
+    username: str,
+    password: str,
+) -> ExternalTokenResponse:
+    data = await asyncio.to_thread(
+        _request_keycloak_token,
+        settings,
+        username,
+        password,
+    )
+
+    access_token = data.get("access_token")
+    if not isinstance(access_token, str) or not access_token.strip():
+        raise ExternalAuthConfigurationError(
+            "Keycloak token response does not contain access_token."
+        )
+
+    token_type = data.get("token_type")
+    expires_in = data.get("expires_in")
+    return ExternalTokenResponse(
+        access_token=access_token,
+        token_type=token_type.strip() if isinstance(token_type, str) else "bearer",
+        expires_in=expires_in if isinstance(expires_in, int) else None,
+    )
 
 
 def _find_jwk_for_token(token: str, jwks: dict[str, object]) -> dict[str, object]:

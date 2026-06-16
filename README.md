@@ -209,28 +209,35 @@ The dev server proxies `/api` to `http://127.0.0.1:8000`, so no backend CORS cha
 Optional frontend env:
 
 ```text
-VITE_API_BASE_URL=/api
-VITE_AUTH_MODE=local
-VITE_SSO_LOGIN_ENABLED=false
+VITE_API_BASE=http://127.0.0.1:8000
 ```
 
 ## Enterprise Auth Architecture
 
-QazPostWeb supports three backend auth modes:
+QazPostWeb supports backend auth modes:
 
 - `AUTH_MODE=local`: development/testing mode. Existing username/password login and QazPostWeb JWT tokens continue to work.
-- `AUTH_MODE=external`: production-style Keycloak mode. Protected APIs accept external JWT bearer tokens only.
+- `AUTH_MODE=external` or `AUTH_MODE=keycloak`: users enter their Keycloak username/password in the normal QazPostWeb login form. The backend exchanges credentials with Keycloak, validates the returned JWT, then resolves the local QazPostWeb user by username/email.
 - `AUTH_MODE=hybrid`: migration mode. Existing local JWT tokens still work, and external Keycloak JWT tokens are accepted when JWKS is configured.
 
-Keycloak answers who the user is. QazPostWeb still answers what the user can do inside the SHPI system. After an external JWT is validated, the backend resolves the local QazPostWeb user by username, then email. The local `users.role`, `users.department_id`, `users.client_id`, and `users.is_active` continue to control permissions and department ownership.
+Keycloak answers who the user is. QazPostWeb still answers what the user can do inside the SHPI system. After an external JWT is validated, the backend resolves the local QazPostWeb user by username, then email. If the user does not exist locally and `KEYCLOAK_AUTO_CREATE_USERS=true`, QazPostWeb creates an active passwordless local profile with `KEYCLOAK_DEFAULT_ROLE` (`client` by default). The local `users.role`, `users.department_id`, `users.client_id`, and `users.is_active` continue to control permissions and department ownership.
+
+In Keycloak mode, local username/password login is reserved for the local admin fallback when `LOCAL_ADMIN_LOGIN_ENABLED=true`. Ordinary users authenticate with Keycloak; a QazPostWeb admin can later change their role and assign department/client ownership from the Users page.
 
 Example production-style environment, with placeholders only:
 
 ```text
 AUTH_MODE=external
 KEYCLOAK_ISSUER_URI=https://keycloak.example.kz/auth/realms/qazpost
+KEYCLOAK_TOKEN_URL=https://keycloak.example.kz/auth/realms/qazpost/protocol/openid-connect/token
 KEYCLOAK_JWKS_URL=https://keycloak.example.kz/auth/realms/qazpost/protocol/openid-connect/certs
+KEYCLOAK_CLIENT_ID=qazpost-web
+KEYCLOAK_CLIENT_SECRET=
+KEYCLOAK_SCOPE=openid profile email
 KEYCLOAK_AUDIENCE=qazpost-web
+KEYCLOAK_AUTO_CREATE_USERS=true
+KEYCLOAK_DEFAULT_ROLE=client
+LOCAL_ADMIN_LOGIN_ENABLED=true
 DATABASE_URL=postgresql+asyncpg://user:changeme@postgres.example.kz:5432/qazpost
 CORS_ORIGINS=https://qazpost-web.example.kz
 ```

@@ -2,6 +2,7 @@ JavaCode/
 .codex-reference/
 administration-dev.yaml
 backend/.env
+administration-service/
 
 # Python cache files
 __pycache__/

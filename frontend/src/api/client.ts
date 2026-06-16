@@ -76,8 +76,19 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiOptions = {})
     throw new ApiError(401, 'Не авторизован');
   }
   if (res.status === 403) {
+    let detail: unknown;
+    let message = 'Нет доступа';
+    try {
+      const data = await res.json();
+      detail = (data as { detail?: unknown })?.detail ?? data;
+      if (typeof (data as { detail?: unknown })?.detail === 'string') {
+        message = (data as { detail: string }).detail;
+      }
+    } catch {
+      /* тело не JSON — оставляем дефолтное сообщение */
+    }
     authErrorHandler?.(403);
-    throw new ApiError(403, 'Нет доступа');
+    throw new ApiError(403, message, detail);
   }
 
   if (!res.ok) {
