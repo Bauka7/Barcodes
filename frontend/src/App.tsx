@@ -4,8 +4,6 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { useAuth } from './auth/AuthContext';
 import type { Role } from './types';
 import LoginPage from './pages/LoginPage';
-import JournalPage from './pages/JournalPage';
-import BatchDetailPage from './pages/BatchDetailPage';
 import SearchPage from './pages/SearchPage';
 import BarcodeDetailPage from './pages/BarcodeDetailPage';
 import DepartmentsPage from './pages/DepartmentsPage';
@@ -58,8 +56,6 @@ export default function App() {
         <Route path="/profile" element={gated(CLIENT, <ProfilePage />)} />
 
         {/* admin/operator */}
-        <Route path="/journal" element={gated(STAFF, <JournalPage />)} />
-        <Route path="/journal/:batchId" element={gated(STAFF, <BatchDetailPage />)} />
         <Route path="/search" element={gated(STAFF, <SearchPage />)} />
         <Route path="/departments" element={gated(STAFF, <DepartmentsPage />)} />
 
