@@ -1,6 +1,9 @@
 import json
 import logging
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from fastapi import Request
 from sqlalchemy import select
@@ -25,11 +28,27 @@ def _request_user_agent(request: Request | None) -> str | None:
     return request.headers.get("user-agent")
 
 
-def _serialize_details(details: dict[str, Any] | None) -> str | None:
+def _json_default(value: object) -> object:
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+
+    if isinstance(value, UUID):
+        return str(value)
+
+    if isinstance(value, Decimal):
+        return float(value)
+
+    return str(value)
+
+
+def _serialize_details(details: dict[str, Any] | str | None) -> str | None:
     if details is None:
         return None
 
-    return json.dumps(details, ensure_ascii=False)
+    if isinstance(details, str):
+        return details
+
+    return json.dumps(details, ensure_ascii=False, default=_json_default)
 
 
 async def create_audit_log(

@@ -977,6 +977,8 @@ export interface components {
         DepartmentItem: {
             /** Id */
             id: number;
+            /** External Id */
+            external_id?: string | null;
             /** Code */
             code: string;
             /** Name */
@@ -989,11 +991,15 @@ export interface components {
             department_type: string | null;
             /** Full Path */
             full_path: string | null;
+            /** Is Active */
+            is_active?: boolean;
         };
         /** DepartmentTreeItem */
         DepartmentTreeItem: {
             /** Id */
             id: number;
+            /** External Id */
+            external_id?: string | null;
             /** Code */
             code: string;
             /** Name */
@@ -1002,6 +1008,8 @@ export interface components {
             department_type: string | null;
             /** Full Path */
             full_path: string | null;
+            /** Is Active */
+            is_active?: boolean;
             /** Children */
             children: components["schemas"]["DepartmentTreeItem"][];
         };

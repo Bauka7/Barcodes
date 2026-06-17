@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     keycloak_auto_create_users: bool = True
     keycloak_default_role: str = "client"
     local_admin_login_enabled: bool = True
+    filpassport_departments_url: str = (
+        "https://filpassport.kazpost.kz/api/barcodes/ltopdepid.jsn=9999&list=ofrupsall"
+    )
+    filpassport_timeout_seconds: int = 30
     app_context_path: str = ""
     server_port: int = 8000
     cors_origins: str = ""

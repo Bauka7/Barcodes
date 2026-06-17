@@ -145,6 +145,12 @@ Import legacy departments from DBF:
 python -m app.db.import_departments
 ```
 
+Import official KazPost departments from FilPassport API:
+
+```powershell
+python -m app.db.import_filpassport_departments
+```
+
 The range workflow also uses the same `barcode_counters` table. Counters are tracked by `package_type` and `region_code`; existing legacy counters are stored under the configured `obl_code` region, usually `01`. Approving a range request reserves numbers by incrementing the package counter for the current `obl_code`. Generating from a range later creates `GeneratedBatch` and `GeneratedBarcode` rows with `source = "range"`.
 
 MVP ownership is department-based. Admin sees all data, operators see their own department subtree, and client-role users see only their own department. `/api/clients` and the `clients` table remain only for legacy compatibility and are hidden from the active frontend flow.
@@ -350,6 +356,15 @@ Department tree:
 curl "http://127.0.0.1:8000/api/departments/tree" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
+
+Admin-only FilPassport department import:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/admin/departments/import-filpassport?dry_run=true" `
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+Configure the source with `FILPASSPORT_DEPARTMENTS_URL` and `FILPASSPORT_TIMEOUT_SECONDS`. The importer creates/updates departments idempotently and does not delete departments that are missing from the source.
 
 Legacy clients API remains available but is hidden from the MVP frontend:
 
