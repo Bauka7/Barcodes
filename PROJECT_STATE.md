@@ -127,15 +127,17 @@ Table: `departments`
 Fields:
 
 - `id`
+- `external_id`
 - `code`
 - `name`
 - `region`
 - `parent_id`
 - `department_type`
 - `full_path`
+- `is_active`
 - `created_at`
 
-Used to store the imported KazPost department hierarchy from the legacy DBF file.
+Used to store the imported KazPost department hierarchy from the legacy DBF file or the official FilPassport API. FilPassport `DepId` is stored as `external_id`.
 
 ### GeneratedBatch
 
@@ -706,6 +708,13 @@ python -m app.db.import_departments
 ```
 
 Imports departments from the configured/default DBF path.
+
+```powershell
+python -m app.db.import_filpassport_departments --dry-run
+python -m app.db.import_filpassport_departments
+```
+
+Imports official KazPost departments from FilPassport `ofrupsall`. The admin endpoint is `POST /api/admin/departments/import-filpassport`; `dry_run=true` fetches and parses without writing. The importer is idempotent and does not delete missing departments.
 
 ## Print System
 

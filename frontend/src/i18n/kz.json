@@ -167,7 +167,13 @@
   "departments": {
     "title": "Бөлімшелер анықтамалығы",
     "subtitle": "«Қазпошта» АҚ бөлімшелерінің иерархиясы",
-    "search": "Бөлімшені атауы немесе коды бойынша іздеу"
+    "search": "Бөлімшені атауы немесе коды бойынша іздеу",
+    "importFilPassport": "FilPassport-тан импорттау",
+    "importConfirm": "Ресми бөлімшелерді FilPassport-тан импорттау керек пе?",
+    "importDone": "Импорт аяқталды",
+    "importDoneWithWarnings": "Импорт ескертулермен аяқталды",
+    "importSummary": "Құрылды: {{created}}, жаңартылды: {{updated}}, өткізіп жіберілді: {{skipped}}, дереккөзде жоқ: {{missing}}",
+    "importErrors": "Қателер / Ескертулер: {{count}}"
   },
   "ranges": {
     "title": "Диапазондар",

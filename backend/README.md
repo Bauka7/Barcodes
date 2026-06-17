@@ -484,6 +484,32 @@ To override the DBF path manually:
 python -m app.db.import_departments "C:\QazPost\BarCodes new\Dbf_win.dbf"
 ```
 
+Import official KazPost departments from FilPassport API:
+
+```powershell
+python -m app.db.import_filpassport_departments
+```
+
+Dry run:
+
+```powershell
+python -m app.db.import_filpassport_departments --dry-run
+```
+
+Admin endpoint:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/admin/departments/import-filpassport?dry_run=true" `
+  -H "Authorization: Bearer ADMIN_TOKEN"
+```
+
+Configuration:
+
+- `FILPASSPORT_DEPARTMENTS_URL`, default official `ofrupsall` endpoint.
+- `FILPASSPORT_TIMEOUT_SECONDS`, default `30`.
+
+The FilPassport importer reads `Result -> level -> level2`, stores `DepId` as `departments.external_id`, maps branch/RUPS/department hierarchy to `department_type`, updates existing rows by `external_id` or safe code match, and does not delete departments missing from the source.
+
 The importer reads these DBF columns:
 
 - `ID` -> legacy unique department code

@@ -43,12 +43,14 @@ async def get_departments(
     return [
         DepartmentItem(
             id=department.id,
+            external_id=department.external_id,
             code=department.code,
             name=department.name,
             region=department.region,
             parent_id=department.parent_id,
             department_type=department.department_type,
             full_path=department.full_path,
+            is_active=department.is_active,
         )
         for department in departments
     ]

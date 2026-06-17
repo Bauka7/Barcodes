@@ -167,7 +167,13 @@
   "departments": {
     "title": "Справочник отделений",
     "subtitle": "Иерархия подразделений АО «Казпочта»",
-    "search": "Поиск отделения по названию или коду"
+    "search": "Поиск отделения по названию или коду",
+    "importFilPassport": "Импортировать из FilPassport",
+    "importConfirm": "Импортировать официальные отделения из FilPassport?",
+    "importDone": "Импорт завершён",
+    "importDoneWithWarnings": "Импорт завершён с предупреждениями",
+    "importSummary": "Создано: {{created}}, обновлено: {{updated}}, пропущено: {{skipped}}, отсутствует в источнике: {{missing}}",
+    "importErrors": "Ошибки / предупреждения: {{count}}"
   },
   "ranges": {
     "title": "Диапазоны",

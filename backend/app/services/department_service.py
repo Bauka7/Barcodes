@@ -65,10 +65,12 @@ async def get_departments_tree(
     for department in departments:
         nodes_by_id[department.id] = {
             "id": department.id,
+            "external_id": department.external_id,
             "code": department.code,
             "name": department.name,
             "department_type": department.department_type,
             "full_path": department.full_path,
+            "is_active": department.is_active,
             "children": [],
         }
 
