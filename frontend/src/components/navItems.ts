@@ -16,13 +16,13 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { key: 'myranges', path: '/my-ranges', icon: 'ticket', roles: ['client'] },
   { key: 'requests', path: '/range-requests', icon: 'inbox', roles: ['operator', 'client'] },
-  { key: 'profile', path: '/profile', icon: 'user-circle', roles: ['client'] },
+  { key: 'profile', path: '/profile', icon: 'user-circle', roles: ['admin', 'operator', 'client'] },
   { key: 'journal', path: '/journal', icon: 'history', roles: ['admin', 'operator'] },
   { key: 'search', path: '/search', icon: 'search', roles: ['admin', 'operator'] },
   { key: 'departments', path: '/departments', icon: 'sitemap', roles: ['admin', 'operator'] },
   { key: 'shpiMap', path: '/shpi-map', icon: 'map', roles: ['admin', 'operator', 'client'] },
   { key: 'users', path: '/users', icon: 'users', roles: ['admin'] },
-  { key: 'audit', path: '/audit', icon: 'clipboard-list', roles: ['admin'] },
+  { key: 'audit', path: '/audit', icon: 'clipboard-list', roles: ['admin', 'operator'] },
   { key: 'settings', path: '/settings', icon: 'settings', roles: ['admin'] },
 ];
 

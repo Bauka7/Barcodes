@@ -17,6 +17,7 @@ interface AuthValue {
   status: Status;
   user: Me | null;
   login: (username: string, password: string) => Promise<Me>;
+  refreshUser: () => Promise<Me>;
   logout: () => void;
 }
 
@@ -103,7 +104,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [queryClient]);
 
-  return <AuthCtx.Provider value={{ status, user, login, logout }}>{children}</AuthCtx.Provider>;
+  const refreshUser = useCallback(async () => {
+    const me = await getMe();
+    setUser(me);
+    setStatus('authenticated');
+    return me;
+  }, []);
+
+  return <AuthCtx.Provider value={{ status, user, login, refreshUser, logout }}>{children}</AuthCtx.Provider>;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components

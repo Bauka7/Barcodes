@@ -211,6 +211,7 @@ async def generate_from_range_endpoint(
         request=request,
         entity_type="barcode_range",
         entity_id=str(range_id),
+        department_id=barcode_range.issued_to_department_id,
         details={"quantity": payload.quantity},
     )
 
@@ -240,6 +241,7 @@ async def generate_from_range_endpoint(
         request=request,
         entity_type="generated_batch",
         entity_id=str(result.batch_id),
+        department_id=barcode_range.issued_to_department_id,
         details={
             "range_id": result.range_id,
             "quantity": len(result.items),
@@ -258,6 +260,7 @@ async def generate_from_range_endpoint(
             request=request,
             entity_type="generated_batch",
             entity_id=str(result.batch_id),
+            department_id=barcode_range.issued_to_department_id,
             details={"range_id": result.range_id, "quantity": len(result.items)},
         )
 
@@ -269,6 +272,7 @@ async def generate_from_range_endpoint(
             request=request,
             entity_type="barcode_range",
             entity_id=str(range_id),
+            department_id=barcode_range.issued_to_department_id,
             details={"batch_id": result.batch_id},
         )
 
@@ -359,6 +363,7 @@ async def cancel_range_endpoint(
                 request=request,
                 entity_type="barcode_range",
                 entity_id=str(range_id),
+                department_id=barcode_range.issued_to_department_id,
                 details={"reason": payload.reason},
             )
     except ValueError as error:

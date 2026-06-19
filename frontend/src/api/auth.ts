@@ -35,6 +35,16 @@ export interface Me {
     phone: string | null;
     role: Role;
   } | null;
+  scope: {
+    type: 'all' | 'subtree' | 'own' | string;
+    label: string;
+  };
+}
+
+export interface ProfileUpdateInput {
+  full_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
 }
 
 // POST /api/auth/login — тело form-urlencoded (НЕ JSON), без Bearer.
@@ -46,4 +56,8 @@ export function login(username: string, password: string): Promise<LoginResponse
 // GET /api/auth/me — текущий профиль (роль определяет навигацию и гарды).
 export function getMe(): Promise<Me> {
   return apiFetch<Me>('/auth/me');
+}
+
+export function updateMyProfile(body: ProfileUpdateInput): Promise<Me> {
+  return apiFetch<Me>('/users/me', { method: 'PATCH', body });
 }

@@ -6,6 +6,10 @@ from pydantic import BaseModel
 class AuditLogItem(BaseModel):
     id: int
     user_id: int | None
+    department_id: int | None = None
+    department_name: str | None = None
+    department_code: str | None = None
+    department_full_path: str | None = None
     username: str | None
     action: str
     entity_type: str | None

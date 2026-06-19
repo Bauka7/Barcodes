@@ -2,19 +2,35 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.routes.auth import user_to_schema
+from app.api.routes.auth import find_nearest_moderator, user_to_schema
 from app.db.database import get_db_session
-from app.models import User
-from app.schemas import UserCreate, UserRead, UserUpdate
+from app.models import Department, User
+from app.schemas import UserCreate, UserProfileUpdate, UserRead, UserUpdate
 from app.services.audit_service import create_audit_log
 from app.services.auth_service import (
     create_user,
+    get_current_user,
     get_user_by_id,
     require_roles,
     update_user,
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+async def _user_profile_to_schema(
+    session: AsyncSession,
+    user: User,
+) -> UserRead:
+    department = None
+    if user.department_id is not None:
+        department_result = await session.execute(
+            select(Department).where(Department.id == user.department_id)
+        )
+        department = department_result.scalar_one_or_none()
+
+    moderator = await find_nearest_moderator(session=session, department=department)
+    return user_to_schema(user, department=department, moderator=moderator)
 
 
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -34,6 +50,7 @@ async def create_user_endpoint(
                 request=request,
                 entity_type="user",
                 entity_id=str(user.id),
+                department_id=user.department_id,
                 details={"username": user.username, "role": user.role},
             )
             await session.refresh(user)
@@ -69,6 +86,46 @@ async def list_users(
         select(User).order_by(User.id).limit(limit).offset(offset)
     )
     return [user_to_schema(user) for user in result.scalars().all()]
+
+
+@router.patch("/me", response_model=UserRead, status_code=status.HTTP_200_OK)
+async def update_my_profile(
+    payload: UserProfileUpdate,
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+) -> UserRead:
+    async with session.begin():
+        user = await get_user_by_id(session=session, user_id=current_user.id)
+
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"User with id {current_user.id} was not found.",
+            )
+
+        updated_fields = payload.model_fields_set
+        if "full_name" in updated_fields:
+            user.full_name = payload.full_name
+        if "email" in updated_fields:
+            user.email = payload.email
+        if "phone" in updated_fields:
+            user.phone = payload.phone
+
+        await session.flush()
+        await session.refresh(user)
+        await create_audit_log(
+            session=session,
+            action="user_profile_updated",
+            user=user,
+            request=request,
+            entity_type="user",
+            entity_id=str(user.id),
+            department_id=user.department_id,
+            details=payload.model_dump(exclude_unset=True),
+        )
+
+    return await _user_profile_to_schema(session=session, user=user)
 
 
 @router.get("/{user_id}", response_model=UserRead, status_code=status.HTTP_200_OK)
@@ -116,6 +173,7 @@ async def update_user_endpoint(
                 request=request,
                 entity_type="user",
                 entity_id=str(user.id),
+                department_id=user.department_id,
                 details=payload.model_dump(exclude_unset=True),
             )
     except ValueError as error:

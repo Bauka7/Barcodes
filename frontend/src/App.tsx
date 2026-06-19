@@ -55,7 +55,7 @@ export default function App() {
         {/* client */}
         <Route path="/my-ranges" element={gated(CLIENT, <MyRangesPage />)} />
         <Route path="/range-requests" element={gated(['operator', 'client'], <RangeRequestsPage />)} />
-        <Route path="/profile" element={gated(CLIENT, <ProfilePage />)} />
+        <Route path="/profile" element={gated(ALL_ROLES, <ProfilePage />)} />
 
         {/* admin/operator */}
         <Route path="/journal" element={gated(STAFF, <JournalPage />)} />
@@ -68,7 +68,7 @@ export default function App() {
 
         {/* admin */}
         <Route path="/users" element={gated(ADMIN, <UsersPage />)} />
-        <Route path="/audit" element={gated(ADMIN, <AuditPage />)} />
+        <Route path="/audit" element={gated(STAFF, <AuditPage />)} />
         <Route path="/settings" element={gated(ADMIN, <SettingsPage />)} />
 
         <Route path="*" element={<HomeRedirect />} />

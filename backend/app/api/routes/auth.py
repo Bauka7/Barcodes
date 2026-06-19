@@ -8,7 +8,7 @@ from app.core.config import get_settings
 from app.db.database import get_db_session
 from app.models import Department, User
 from app.schemas import Token, UserRead
-from app.services.audit_service import log_user_action
+from app.services.audit_service import safe_log_user_action
 from app.services.auth_service import (
     authenticate_external_password,
     authenticate_local_admin,
@@ -23,6 +23,26 @@ ROLE_LABELS = {
     "operator": "Модератор",
     "client": "Сотрудник отделения",
 }
+
+SCOPE_LABELS = {
+    "all": "Все подразделения",
+    "subtree": "Свое подразделение и дочерние отделения",
+    "own": "Свое подразделение",
+}
+
+
+def get_user_scope(user: User) -> dict[str, str]:
+    if user.role == "admin":
+        scope_type = "all"
+    elif user.role == "operator":
+        scope_type = "subtree"
+    else:
+        scope_type = "own"
+
+    return {
+        "type": scope_type,
+        "label": SCOPE_LABELS[scope_type],
+    }
 
 
 def user_to_schema(
@@ -65,6 +85,7 @@ def user_to_schema(
             if moderator is not None
             else None
         ),
+        scope=get_user_scope(user),
         created_at=user.created_at,
         updated_at=user.updated_at,
     )
@@ -130,11 +151,12 @@ async def login(
             subject=user.username,
             extra_claims={"role": user.role},
         )
-        await log_user_action(
+        await safe_log_user_action(
             session=session,
             action="login_success",
             user=user,
             request=request,
+            department_id=user.department_id,
         )
         return Token(access_token=access_token)
 
@@ -150,11 +172,12 @@ async def login(
                     subject=admin_user.username,
                     extra_claims={"role": admin_user.role, "auth_source": "local_admin"},
                 )
-                await log_user_action(
+                await safe_log_user_action(
                     session=session,
                     action="local_admin_login_success",
                     user=admin_user,
                     request=request,
+                    department_id=admin_user.department_id,
                 )
                 return Token(access_token=access_token)
 
@@ -167,11 +190,12 @@ async def login(
         except HTTPException:
             await _log_failed_login(session, request, form_data.username)
             raise
-        await log_user_action(
+        await safe_log_user_action(
             session=session,
             action="keycloak_login_success",
             user=user,
             request=request,
+            department_id=user.department_id,
         )
         return Token(access_token=token.access_token, token_type=token.token_type)
 
@@ -186,11 +210,12 @@ async def login(
                 subject=user.username,
                 extra_claims={"role": user.role},
             )
-            await log_user_action(
+            await safe_log_user_action(
                 session=session,
                 action="login_success",
                 user=user,
                 request=request,
+                department_id=user.department_id,
             )
             return Token(access_token=access_token)
 
@@ -203,11 +228,12 @@ async def login(
         except HTTPException:
             await _log_failed_login(session, request, form_data.username)
             raise
-        await log_user_action(
+        await safe_log_user_action(
             session=session,
             action="keycloak_login_success",
             user=user,
             request=request,
+            department_id=user.department_id,
         )
         return Token(access_token=token.access_token, token_type=token.token_type)
 
@@ -222,7 +248,7 @@ async def _log_failed_login(
     request: Request,
     username: str,
 ) -> None:
-    await log_user_action(
+    await safe_log_user_action(
         session=session,
         action="login_failed",
         username=username,

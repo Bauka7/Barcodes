@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -110,6 +111,7 @@ async def create_barcode_numbers(
         request=request,
         entity_type="generated_batch",
         entity_id=str(result.batch_id),
+        department_id=payload.department_id,
         details={
             "package_type": payload.package_type,
             "quantity": payload.quantity,
@@ -223,6 +225,16 @@ async def _batch_is_visible(
         batch_id=batch_id,
         department_ids=scope_ids,
     )
+
+
+async def _get_batch_department_id(
+    session: AsyncSession,
+    batch_id: int,
+) -> int | None:
+    result = await session.execute(
+        select(GeneratedBatch.department_id).where(GeneratedBatch.id == batch_id)
+    )
+    return result.scalar_one_or_none()
 
 
 async def _department_is_visible(
@@ -361,6 +373,14 @@ async def get_barcode_detail_endpoint(
             detail=f"Generated barcode '{barcode}' was not found.",
         )
 
+    response = _barcode_detail_to_schema(
+        barcode=barcode_record,
+        batch=batch,
+        barcode_range=barcode_range,
+        department=department,
+        range_created_by=range_created_by,
+    )
+
     await safe_log_user_action(
         session=session,
         action="barcode_detail_viewed",
@@ -368,16 +388,11 @@ async def get_barcode_detail_endpoint(
         request=request,
         entity_type="generated_barcode",
         entity_id=str(barcode_record.id),
+        department_id=barcode_record.department_id,
         details={"barcode": barcode_record.barcode},
     )
 
-    return _barcode_detail_to_schema(
-        barcode=barcode_record,
-        batch=batch,
-        barcode_range=barcode_range,
-        department=department,
-        range_created_by=range_created_by,
-    )
+    return response
 
 
 @router.get(
@@ -645,6 +660,7 @@ async def preview_batch_pdf(
         request=request,
         entity_type="generated_batch",
         entity_id=str(batch_id),
+        department_id=await _get_batch_department_id(session=session, batch_id=batch_id),
     )
 
     return _pdf_response(
@@ -705,6 +721,7 @@ async def print_batch_pdf(
         request=request,
         entity_type="generated_batch",
         entity_id=str(batch_id),
+        department_id=await _get_batch_department_id(session=session, batch_id=batch_id),
         details={"printer_name": payload.printer_name},
     )
 

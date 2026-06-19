@@ -28,7 +28,7 @@ from app.schemas.range_generation import (
 )
 from app.schemas.shpi_map import ShpiMapCodeItem, ShpiMapResponse
 from app.schemas.auth import Token, TokenData
-from app.schemas.user import UserCreate, UserRead, UserUpdate
+from app.schemas.user import UserCreate, UserProfileUpdate, UserRead, UserUpdate
 
 __all__ = [
     "AuditLogItem",
@@ -62,6 +62,7 @@ __all__ = [
     "Token",
     "TokenData",
     "UserCreate",
+    "UserProfileUpdate",
     "UserRead",
     "UserUpdate",
 ]

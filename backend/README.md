@@ -4,7 +4,7 @@ FastAPI backend for a KazPost-style barcode generation system.
 
 The project currently includes the application scaffold, async database setup, migrations, seed data, and barcode number generation endpoints.
 
-It also includes authentication, roles, audit logging, legacy clients API, range requests, barcode range allocation, SHPI generation from allocated ranges, individual SHPI lifecycle tracking, and a SHPI Map for counter monitoring by code and region.
+It also includes authentication, roles, department-scoped audit logging, legacy clients API, range requests, barcode range allocation, SHPI generation from allocated ranges, individual SHPI lifecycle tracking, and a SHPI Map for counter monitoring by code and region.
 
 ## Requirements
 
@@ -180,7 +180,7 @@ curl "http://127.0.0.1:8000/api/auth/me" `
 
 Roles:
 
-- `admin`: users, audit logs, generation, history, print.
+- `admin`: users, all audit logs, generation, history, print.
 - `operator`: own department subtree for range requests, ranges, generation, barcode history, PDF preview, PDF print, and print history.
 - `client`: own department only for requests, ranges, generation, PDF preview/download, and own history.
 
@@ -310,12 +310,16 @@ curl "http://127.0.0.1:8000/api/barcodes/print-history?limit=20&offset=0" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
-Audit logs, admin only:
+Audit logs, admin/operator:
 
 ```powershell
 curl "http://127.0.0.1:8000/api/audit-logs?limit=20&offset=0" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
+
+Audit records have optional `department_id`. Admin can read all logs, including global logs where `department_id` is `NULL`. Operator can read only logs with `department_id` inside the operator department subtree; `NULL` global logs and other departments are hidden. Client-role users receive 403.
+
+Filters: `action`, `username`, `entity_type`, `entity_id`, `department_id`, `date_from`, `date_to`, `limit`, `offset`.
 
 ## SHPI Map
 

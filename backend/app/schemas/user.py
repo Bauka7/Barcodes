@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class UserCreate(BaseModel):
@@ -25,6 +25,32 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class UserProfileUpdate(BaseModel):
+    full_name: str | None = Field(default=None, max_length=255)
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+
+        normalized = value.strip()
+        if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
+            raise ValueError("email must be a valid email address.")
+        return normalized
+
+    @field_validator("full_name", "phone")
+    @classmethod
+    def normalize_empty_strings(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized = value.strip()
+        return normalized or None
+
+
 class UserDepartmentRead(BaseModel):
     id: int
     code: str
@@ -43,6 +69,11 @@ class UserModeratorRead(BaseModel):
     role: str
 
 
+class UserScopeRead(BaseModel):
+    type: str
+    label: str
+
+
 class UserRead(BaseModel):
     id: int
     username: str
@@ -56,5 +87,6 @@ class UserRead(BaseModel):
     is_active: bool
     department: UserDepartmentRead | None = None
     moderator: UserModeratorRead | None = None
+    scope: UserScopeRead
     created_at: datetime
     updated_at: datetime

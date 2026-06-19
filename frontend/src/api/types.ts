@@ -39,7 +39,12 @@ export type UserRead = S['UserRead'];
 export type UserCreate = S['UserCreate'];
 export type UserUpdate = S['UserUpdate'];
 
-export type AuditLogItem = S['AuditLogItem'];
+export type AuditLogItem = S['AuditLogItem'] & {
+  department_id?: number | null;
+  department_name?: string | null;
+  department_code?: string | null;
+  department_full_path?: string | null;
+};
 
 export type DepartmentItem = S['DepartmentItem'];
 export type DepartmentTreeItem = S['DepartmentTreeItem'];

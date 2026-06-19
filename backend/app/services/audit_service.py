@@ -8,8 +8,13 @@ from uuid import UUID
 from fastapi import Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models import AuditLog, User
+from app.services.department_scope_service import (
+    DepartmentScopeError,
+    get_user_department_scope_ids,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +64,12 @@ async def create_audit_log(
     request: Request | None = None,
     entity_type: str | None = None,
     entity_id: str | None = None,
+    department_id: int | None = None,
     details: dict[str, Any] | None = None,
 ) -> AuditLog:
     audit_log = AuditLog(
         user_id=user.id if user else None,
+        department_id=department_id,
         username=user.username if user else username,
         action=action,
         entity_type=entity_type,
@@ -84,6 +91,7 @@ async def log_user_action(
     request: Request | None = None,
     entity_type: str | None = None,
     entity_id: str | None = None,
+    department_id: int | None = None,
     details: dict[str, Any] | None = None,
 ) -> AuditLog:
     audit_log = await create_audit_log(
@@ -94,6 +102,7 @@ async def log_user_action(
         request=request,
         entity_type=entity_type,
         entity_id=entity_id,
+        department_id=department_id,
         details=details,
     )
     await session.commit()
@@ -108,6 +117,7 @@ async def safe_log_user_action(
     request: Request | None = None,
     entity_type: str | None = None,
     entity_id: str | None = None,
+    department_id: int | None = None,
     details: dict[str, Any] | None = None,
 ) -> AuditLog | None:
     try:
@@ -119,6 +129,7 @@ async def safe_log_user_action(
             request=request,
             entity_type=entity_type,
             entity_id=entity_id,
+            department_id=department_id,
             details=details,
         )
     except Exception:
@@ -139,19 +150,62 @@ def _validate_audit_pagination(limit: int, offset: int) -> tuple[int, int]:
 
 async def list_audit_logs(
     session: AsyncSession,
+    current_user: User,
     limit: int = 20,
     offset: int = 0,
     action: str | None = None,
     username: str | None = None,
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+    department_id: int | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
 ) -> list[AuditLog]:
     validated_limit, validated_offset = _validate_audit_pagination(limit, offset)
-    statement = select(AuditLog).order_by(AuditLog.created_at.desc())
+    statement = (
+        select(AuditLog)
+        .options(selectinload(AuditLog.department))
+        .order_by(AuditLog.created_at.desc())
+    )
+
+    if current_user.role == "operator":
+        try:
+            allowed_department_ids = await get_user_department_scope_ids(
+                session=session,
+                user=current_user,
+            )
+        except DepartmentScopeError as error:
+            raise PermissionError(str(error)) from error
+        if not allowed_department_ids:
+            return []
+
+        if department_id is not None and department_id not in allowed_department_ids:
+            raise PermissionError("Not enough permissions for this department.")
+
+        statement = statement.where(AuditLog.department_id.in_(allowed_department_ids))
+    elif current_user.role == "admin":
+        if department_id is not None:
+            statement = statement.where(AuditLog.department_id == department_id)
+    else:
+        raise PermissionError("Not enough permissions to view audit logs.")
 
     if action:
         statement = statement.where(AuditLog.action == action)
 
     if username:
         statement = statement.where(AuditLog.username == username)
+
+    if entity_type:
+        statement = statement.where(AuditLog.entity_type == entity_type)
+
+    if entity_id:
+        statement = statement.where(AuditLog.entity_id == entity_id)
+
+    if date_from:
+        statement = statement.where(AuditLog.created_at >= date_from)
+
+    if date_to:
+        statement = statement.where(AuditLog.created_at <= date_to)
 
     statement = statement.limit(validated_limit).offset(validated_offset)
     result = await session.execute(statement)

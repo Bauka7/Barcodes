@@ -93,6 +93,7 @@ async def create_range_request_endpoint(
                 request=request,
                 entity_type="range_request",
                 entity_id=str(range_request.id),
+                department_id=range_request.department_id,
                 details={
                     "purpose": range_request.purpose,
                     "requested_quantity": range_request.requested_quantity,
@@ -220,6 +221,7 @@ async def approve_range_request_endpoint(
                 request=request,
                 entity_type="range_request",
                 entity_id=str(range_request.id),
+                department_id=range_request.department_id,
                 details={
                     "range_id": barcode_range.id,
                     "approved_code": range_request.approved_code,
@@ -232,6 +234,7 @@ async def approve_range_request_endpoint(
                 request=request,
                 entity_type="barcode_range",
                 entity_id=str(barcode_range.id),
+                department_id=barcode_range.issued_to_department_id,
                 details=_barcode_range_to_schema(barcode_range).model_dump(mode="json"),
             )
     except LookupError as error:
@@ -297,6 +300,7 @@ async def reject_range_request_endpoint(
                 request=request,
                 entity_type="range_request",
                 entity_id=str(range_request.id),
+                department_id=range_request.department_id,
                 details={"notes": payload.notes},
             )
     except ValueError as error:
@@ -362,6 +366,7 @@ async def cancel_range_request_endpoint(
                 request=request,
                 entity_type="range_request",
                 entity_id=str(range_request.id),
+                department_id=range_request.department_id,
                 details={"notes": payload.notes},
             )
     except ValueError as error:

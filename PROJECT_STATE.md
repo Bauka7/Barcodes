@@ -17,7 +17,7 @@ The backend currently supports:
 - Print tracking without controlling the operating system printer.
 - JWT authentication.
 - Roles: `admin`, `operator`, `client`.
-- Audit logging for important user actions.
+- Audit logging for important user actions with department-scoped operator access.
 - Legacy clients API, range requests, and barcode range allocation foundation.
 - SHPI generation from allocated barcode ranges.
 - Individual barcode lifecycle tracking.
@@ -249,6 +249,7 @@ Fields:
 
 - `id`
 - `user_id`
+- `department_id`
 - `username`
 - `action`
 - `entity_type`
@@ -257,6 +258,13 @@ Fields:
 - `user_agent`
 - `details`
 - `created_at`
+
+Audit scope:
+
+- admin can read all audit logs, including `department_id = NULL` global/legacy logs;
+- operator can read only logs whose `department_id` is inside the operator department subtree;
+- client-role users cannot access audit logs;
+- old logs can keep `department_id = NULL` and are admin-only.
 
 ### Client
 
@@ -386,11 +394,25 @@ PATCH /api/users/{user_id}
 
 ### Audit Logs
 
-Admin only:
+Admin/operator:
 
 ```http
 GET /api/audit-logs
 ```
+
+Query params:
+
+- `limit`, default `20`, max `100`
+- `offset`, default `0`
+- `action`, optional
+- `username`, optional
+- `entity_type`, optional
+- `entity_id`, optional
+- `department_id`, optional; admin can filter any department, operator only own subtree
+- `date_from`, optional datetime
+- `date_to`, optional datetime
+
+Admin sees all logs, including global `department_id = NULL` logs. Operator sees only logs from the operator department subtree and cannot read global logs. Client-role users receive 403.
 
 ### Admin SHPI Map
 
@@ -399,13 +421,6 @@ GET /api/admin/shpi-map
 ```
 
 Admin only. Returns `region_codes`, sorted `codes`, and matrix `cells` for counter monitoring. It does not calculate remaining totals, generated totals, printed totals, reports, analytics, or department statistics.
-
-Query params:
-
-- `limit`, default `20`, max `100`
-- `offset`, default `0`
-- `action`, optional
-- `username`, optional
 
 ### Clients
 
@@ -802,12 +817,18 @@ Audit actions currently logged:
 
 - `login_success`
 - `login_failed`
+- `local_admin_login_success`
+- `keycloak_login_success`
 - `user_created`
 - `user_updated`
+- `user_profile_updated`
 - `barcode_generated`
 - `pdf_preview_generated`
 - `batch_printed`
+- `client_pdf_downloaded`
 - `client_created`
+- `filpassport_departments_imported`
+- `filpassport_departments_import_dry_run`
 - `range_request_created`
 - `range_request_approved`
 - `range_request_rejected`
@@ -815,6 +836,7 @@ Audit actions currently logged:
 - `range_created`
 - `range_generation_started`
 - `range_generation_completed`
+- `client_range_generated`
 - `range_exhausted`
 - `barcode_detail_viewed`
 
@@ -917,6 +939,9 @@ Migration files:
 - `0013_add_generated_barcode_actor_fields.py`
 - `0014_add_region_code_to_barcode_counters.py`
 - `0015_prepare_users_for_external_auth.py`
+- `0016_add_phone_to_users.py`
+- `0017_add_department_external_fields.py`
+- `0018_add_department_id_to_audit_logs.py`
 
 Common commands from `backend/`:
 
@@ -936,6 +961,7 @@ When adding models, register them in `app/models/__init__.py` so Alembic can see
 - Admin can access all departments.
 - Operator access is limited to the operator department and descendants.
 - Client-role access is limited to the user's own department.
+- Audit list access is backend-enforced: admin sees all audit rows, operator sees only rows in own department subtree, client receives 403.
 - Never generate barcode numbers without locking the package counter row.
 - Never update counters separately from history rows for API generation.
 - Keep generation, batch history, and barcode history atomic.

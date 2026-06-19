@@ -22,7 +22,7 @@ Implemented:
 - Print history tracking.
 - Authentication with JWT access tokens.
 - Roles: `admin`, `operator`, `client`.
-- Audit logging for important user actions.
+- Audit logging for important user actions with department-scoped moderator access.
 - Legacy clients API, range requests, barcode range allocation, and SHPI generation from allocated ranges.
 - Individual barcode lifecycle tracking.
 - SHPI Map for monitoring counters by code and region.
@@ -423,12 +423,18 @@ curl "http://127.0.0.1:8000/api/ranges/1/batches" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
-Audit logs, admin only:
+Audit logs, admin/operator:
 
 ```powershell
 curl "http://127.0.0.1:8000/api/audit-logs?limit=20&offset=0" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
+
+Admin sees all audit logs, including global logs with `department_id = NULL`.
+Operator sees only logs whose `department_id` is inside the operator department subtree.
+Client-role users cannot access audit logs.
+
+Supported filters: `action`, `username`, `entity_type`, `entity_id`, `department_id`, `date_from`, `date_to`, `limit`, `offset`.
 
 Admin SHPI Map, counter monitoring only:
 
