@@ -22,7 +22,11 @@ async def list_departments(
     department_ids: list[int] | None = None,
 ) -> list[Department]:
     validated_limit, validated_offset = _validate_pagination(limit, offset)
-    statement = select(Department).order_by(Department.parent_id, Department.name)
+    statement = (
+        select(Department)
+        .where(Department.is_active.is_(True))
+        .order_by(Department.parent_id, Department.name)
+    )
 
     if department_ids is not None:
         if not department_ids:
@@ -50,7 +54,11 @@ async def get_departments_tree(
     session: AsyncSession,
     department_ids: list[int] | None = None,
 ) -> list[dict[str, object]]:
-    statement = select(Department).order_by(Department.parent_id, Department.name)
+    statement = (
+        select(Department)
+        .where(Department.is_active.is_(True))
+        .order_by(Department.parent_id, Department.name)
+    )
     if department_ids is not None:
         if not department_ids:
             return []

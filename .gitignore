@@ -2,6 +2,7 @@ JavaCode/
 .codex-reference/
 administration-dev.yaml
 backend/.env
+backend/.venv
 administration-service/
 
 # Python cache files
@@ -14,3 +15,5 @@ __pycache__/
 frontend/node_modules/
 frontend/dist/
 frontend/vite-dev.*.log
+
+.tmp_reglament_pages

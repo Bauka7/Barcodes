@@ -12,6 +12,8 @@ from app.core.config import get_settings
 from app.models import Department
 from app.services.department_import_service import LEGACY_ROOT_CODE, LEGACY_ROOT_NAME
 
+OBSOLETE_DEMO_ROOT_CODES = {"KZROOT"}
+
 
 class FilPassportImportError(RuntimeError):
     pass
@@ -33,6 +35,7 @@ class FilPassportDepartmentRecord:
 class FilPassportImportResult:
     created: int
     updated: int
+    deactivated: int
     skipped: int
     missing: int
     errors: list[str]
@@ -44,6 +47,7 @@ class FilPassportImportResult:
         return {
             "created": self.created,
             "updated": self.updated,
+            "deactivated": self.deactivated,
             "skipped": self.skipped,
             "missing": self.missing,
             "errors": self.errors,
@@ -221,6 +225,45 @@ def _build_full_paths(
     return {external_id: build(external_id) for external_id in records_by_external_id}
 
 
+def _collect_obsolete_demo_departments(departments: list[Department]) -> set[int]:
+    roots = {
+        department.id
+        for department in departments
+        if department.code in OBSOLETE_DEMO_ROOT_CODES
+    }
+    if not roots:
+        return set()
+
+    children_by_parent: dict[int, list[int]] = {}
+    for department in departments:
+        if department.parent_id is None:
+            continue
+        children_by_parent.setdefault(department.parent_id, []).append(department.id)
+
+    obsolete_ids = set(roots)
+    stack = list(roots)
+    while stack:
+        parent_id = stack.pop()
+        for child_id in children_by_parent.get(parent_id, []):
+            if child_id in obsolete_ids:
+                continue
+            obsolete_ids.add(child_id)
+            stack.append(child_id)
+
+    return obsolete_ids
+
+
+def _deactivate_obsolete_demo_departments(departments: list[Department]) -> int:
+    obsolete_ids = _collect_obsolete_demo_departments(departments)
+    deactivated = 0
+    for department in departments:
+        if department.id not in obsolete_ids or not department.is_active:
+            continue
+        department.is_active = False
+        deactivated += 1
+    return deactivated
+
+
 async def import_departments_from_filpassport(
     session: AsyncSession,
     dry_run: bool = False,
@@ -237,6 +280,7 @@ async def import_departments_from_filpassport(
 
     created = 0
     updated = 0
+    deactivated = 0
     skipped = 0
 
     if dry_run:
@@ -254,6 +298,14 @@ async def import_departments_from_filpassport(
             )
         )
         existing = list(result.scalars().all())
+        all_departments_result = await session.execute(select(Department))
+        all_departments = list(all_departments_result.scalars().all())
+        obsolete_department_ids = _collect_obsolete_demo_departments(all_departments)
+        deactivated = sum(
+            1
+            for department in all_departments
+            if department.id in obsolete_department_ids and department.is_active
+        )
         departments_by_external_id = {
             department.external_id: department
             for department in existing
@@ -271,6 +323,7 @@ async def import_departments_from_filpassport(
         return FilPassportImportResult(
             created=created,
             updated=updated,
+            deactivated=deactivated,
             skipped=skipped,
             missing=missing,
             errors=errors,
@@ -294,6 +347,10 @@ async def import_departments_from_filpassport(
             )
         )
         existing = list(result.scalars().all())
+        all_departments_result = await session.execute(select(Department))
+        all_departments = list(all_departments_result.scalars().all())
+        deactivated = _deactivate_obsolete_demo_departments(all_departments)
+
         departments_by_external_id = {
             department.external_id: department
             for department in existing
@@ -392,6 +449,7 @@ async def import_departments_from_filpassport(
     return FilPassportImportResult(
         created=created,
         updated=updated,
+        deactivated=deactivated,
         skipped=skipped,
         missing=missing,
         errors=errors,
