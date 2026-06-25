@@ -26,6 +26,7 @@ class BarcodeRange(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     package_type: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    region_code: Mapped[str | None] = mapped_column(String(2), index=True, nullable=True)
     start_number: Mapped[int] = mapped_column(Integer, nullable=False)
     end_number: Mapped[int] = mapped_column(Integer, nullable=False)
     current_number: Mapped[int] = mapped_column(Integer, nullable=False)

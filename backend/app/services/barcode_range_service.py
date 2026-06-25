@@ -3,11 +3,12 @@ from datetime import datetime, timezone
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import BarcodeCounter, BarcodeRange, RangeRequest, User
+from app.models import BarcodeRange, RangeRequest, User
 from app.services.barcode_number_service import (
     MAX_COUNTER_VALUE,
     validate_package_type,
 )
+from app.services.barcode_counter_service import get_or_create_official_counter_for_update
 from app.services.shpi_region_service import resolve_generation_shpi_region_code
 
 # MVP lifecycle is active -> exhausted or active -> cancelled.
@@ -37,13 +38,11 @@ async def create_barcode_range_from_request(
         department_id=range_request.department_id,
     )
 
-    result = await session.execute(
-        select(BarcodeCounter)
-        .where(BarcodeCounter.package_type == package_type)
-        .where(BarcodeCounter.region_code == region_code)
-        .with_for_update()
+    counter = await get_or_create_official_counter_for_update(
+        session=session,
+        package_type=package_type,
+        region_code=region_code,
     )
-    counter = result.scalar_one_or_none()
 
     if counter is None:
         raise LookupError(
@@ -60,6 +59,7 @@ async def create_barcode_range_from_request(
     counter.current_value = end_number
     barcode_range = BarcodeRange(
         package_type=package_type,
+        region_code=region_code,
         start_number=start_number,
         end_number=end_number,
         current_number=start_number,

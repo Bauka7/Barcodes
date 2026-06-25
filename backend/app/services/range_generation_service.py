@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,8 @@ from app.services.barcode_number_service import (
     validate_quantity,
 )
 from app.services.shpi_region_service import resolve_generation_shpi_region_code
+
+logger = logging.getLogger(__name__)
 
 
 class BarcodeRangeNotFoundError(LookupError):
@@ -35,6 +38,33 @@ def calculate_range_remaining(barcode_range: BarcodeRange) -> int:
         return 0
 
     return max(0, barcode_range.end_number - barcode_range.current_number + 1)
+
+
+def _normalize_range_region_code(region_code: str | None) -> str | None:
+    normalized = (region_code or "").strip()
+    if len(normalized) == 2 and normalized.isdigit():
+        return normalized
+    return None
+
+
+async def resolve_range_generation_region_code(
+    session: AsyncSession,
+    barcode_range: BarcodeRange,
+) -> str:
+    stored_region_code = _normalize_range_region_code(barcode_range.region_code)
+    if stored_region_code is not None:
+        return stored_region_code
+
+    fallback_region_code = await resolve_generation_shpi_region_code(
+        session=session,
+        department_id=barcode_range.issued_to_department_id,
+    )
+    logger.warning(
+        "Barcode range id=%s has no stored region_code; using fallback region_code=%s.",
+        barcode_range.id,
+        fallback_region_code,
+    )
+    return fallback_region_code
 
 
 async def get_range_remaining(
@@ -104,9 +134,9 @@ async def generate_barcodes_from_range(
                 f"Not enough numbers remaining in range. Remaining: {remaining}."
             )
 
-        obl_code = await resolve_generation_shpi_region_code(
+        obl_code = await resolve_range_generation_region_code(
             session=session,
-            department_id=barcode_range.issued_to_department_id,
+            barcode_range=barcode_range,
         )
         suffix = validate_country_suffix(
             await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)
