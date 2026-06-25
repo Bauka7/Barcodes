@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -160,7 +160,7 @@ async def list_audit_logs(
     department_id: int | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
-) -> list[AuditLog]:
+) -> tuple[list[AuditLog], int]:
     validated_limit, validated_offset = _validate_audit_pagination(limit, offset)
     statement = (
         select(AuditLog)
@@ -177,17 +177,17 @@ async def list_audit_logs(
         except DepartmentScopeError as error:
             raise PermissionError(str(error)) from error
         if not allowed_department_ids:
-            return []
+            return [], 0
 
         if department_id is not None and department_id not in allowed_department_ids:
             raise PermissionError("Not enough permissions for this department.")
 
         statement = statement.where(AuditLog.department_id.in_(allowed_department_ids))
-    elif current_user.role == "admin":
-        if department_id is not None:
-            statement = statement.where(AuditLog.department_id == department_id)
-    else:
+    elif current_user.role != "admin":
         raise PermissionError("Not enough permissions to view audit logs.")
+
+    if department_id is not None:
+        statement = statement.where(AuditLog.department_id == department_id)
 
     if action:
         statement = statement.where(AuditLog.action == action)
@@ -207,6 +207,9 @@ async def list_audit_logs(
     if date_to:
         statement = statement.where(AuditLog.created_at <= date_to)
 
-    statement = statement.limit(validated_limit).offset(validated_offset)
-    result = await session.execute(statement)
-    return list(result.scalars().all())
+    count_statement = select(func.count()).select_from(statement.order_by(None).subquery())
+    total = int((await session.execute(count_statement)).scalar_one())
+    result = await session.execute(
+        statement.limit(validated_limit).offset(validated_offset)
+    )
+    return list(result.scalars().all()), total

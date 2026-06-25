@@ -1,4 +1,4 @@
-from app.schemas.audit import AuditLogItem
+from app.schemas.audit import AuditLogItem, AuditLogListResponse
 from app.schemas.barcode_range import BarcodeRangeRead
 from app.schemas.barcode import (
     BarcodeDepartmentInfo,
@@ -14,7 +14,12 @@ from app.schemas.barcode import (
 )
 from app.schemas.barcode_code import BarcodeCodeRead
 from app.schemas.client import ClientCreate, ClientRead, ClientUpdate
-from app.schemas.department import DepartmentItem, DepartmentTreeItem
+from app.schemas.department import (
+    DepartmentItem,
+    DepartmentTreeItem,
+    MissingShpiRegionDepartmentItem,
+    MissingShpiRegionDepartmentResponse,
+)
 from app.schemas.print import PrintedBatchItem, PrintBatchRequest
 from app.schemas.range_request import (
     RangeRequestCreate,
@@ -26,12 +31,13 @@ from app.schemas.range_generation import (
     RangeGenerateRequest,
     RangeRemainingResponse,
 )
-from app.schemas.shpi_map import ShpiMapCodeItem, ShpiMapResponse
+from app.schemas.shpi_map import ShpiMapCodeItem, ShpiMapRegionItem, ShpiMapResponse
 from app.schemas.auth import Token, TokenData
 from app.schemas.user import UserCreate, UserProfileUpdate, UserRead, UserUpdate
 
 __all__ = [
     "AuditLogItem",
+    "AuditLogListResponse",
     "BarcodeDepartmentInfo",
     "BarcodeDetailResponse",
     "BarcodeLifecycleListResponse",
@@ -45,6 +51,8 @@ __all__ = [
     "ClientUpdate",
     "DepartmentItem",
     "DepartmentTreeItem",
+    "MissingShpiRegionDepartmentItem",
+    "MissingShpiRegionDepartmentResponse",
     "GeneratedBarcodeItem",
     "GeneratedBarcodeSearchResponse",
     "GeneratedBatchDetail",
@@ -58,6 +66,7 @@ __all__ = [
     "RangeGenerateRequest",
     "RangeRemainingResponse",
     "ShpiMapCodeItem",
+    "ShpiMapRegionItem",
     "ShpiMapResponse",
     "Token",
     "TokenData",

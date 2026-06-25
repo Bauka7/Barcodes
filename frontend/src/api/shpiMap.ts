@@ -9,7 +9,13 @@ export interface ShpiMapCodeItem {
   status: ShpiMapStatus;
 }
 
+export interface ShpiMapRegionItem {
+  code: string;
+  name: string;
+}
+
 export interface ShpiMapResponse {
+  regions: ShpiMapRegionItem[];
   region_codes: string[];
   codes: string[];
   cells: ShpiMapCodeItem[];

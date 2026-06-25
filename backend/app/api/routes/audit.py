@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db_session
 from app.models import AuditLog, User
-from app.schemas import AuditLogItem
+from app.schemas import AuditLogItem, AuditLogListResponse
 from app.services.audit_service import list_audit_logs
 from app.services.auth_service import require_roles
 
@@ -31,7 +31,7 @@ def _audit_log_to_schema(audit_log: AuditLog) -> AuditLogItem:
     )
 
 
-@router.get("", response_model=list[AuditLogItem], status_code=status.HTTP_200_OK)
+@router.get("", response_model=AuditLogListResponse, status_code=status.HTTP_200_OK)
 async def get_audit_logs(
     limit: int = Query(default=20),
     offset: int = Query(default=0),
@@ -44,9 +44,9 @@ async def get_audit_logs(
     date_to: datetime | None = Query(default=None),
     session: AsyncSession = Depends(get_db_session),
     current_user: User = Depends(require_roles("admin", "operator")),
-) -> list[AuditLogItem]:
+) -> AuditLogListResponse:
     try:
-        audit_logs = await list_audit_logs(
+        audit_logs, total = await list_audit_logs(
             session=session,
             current_user=current_user,
             limit=limit,
@@ -70,4 +70,9 @@ async def get_audit_logs(
             detail=str(error),
         ) from error
 
-    return [_audit_log_to_schema(audit_log) for audit_log in audit_logs]
+    return AuditLogListResponse(
+        items=[_audit_log_to_schema(audit_log) for audit_log in audit_logs],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )

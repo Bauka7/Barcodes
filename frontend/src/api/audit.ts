@@ -1,6 +1,6 @@
 import { apiFetch } from './client';
 import { qs } from '../lib/qs';
-import type { AuditLogItem } from './types';
+import type { AuditLogListResponse } from './types';
 
 export interface AuditParams {
   limit?: number;
@@ -13,5 +13,5 @@ export interface AuditParams {
   date_from?: string;
   date_to?: string;
 }
-export const listAuditLogs = (p: AuditParams = {}): Promise<AuditLogItem[]> =>
-  apiFetch<AuditLogItem[]>(`/audit-logs${qs({ ...p })}`);
+export const listAuditLogs = (p: AuditParams = {}): Promise<AuditLogListResponse> =>
+  apiFetch<AuditLogListResponse>(`/audit-logs${qs({ ...p })}`);

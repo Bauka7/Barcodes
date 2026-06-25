@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AppSetting, BarcodeCounter
 from app.services.barcode_history_service import create_generation_history
+from app.services.shpi_region_service import resolve_generation_shpi_region_code
 
 CHECK_DIGIT_WEIGHTS = (8, 6, 4, 2, 3, 5, 9, 7)
 PACKAGE_TYPE_PATTERN = re.compile(r"^[A-Z]{2}$")
@@ -117,12 +118,16 @@ async def generate_barcode_numbers(
     session: AsyncSession,
     package_type: str,
     quantity: int,
+    department_id: int | None = None,
 ) -> list[str]:
     normalized_package_type = validate_package_type(package_type)
     validated_quantity = validate_quantity(quantity)
 
     async with session.begin():
-        obl_code = await get_setting_value(session, "obl_code", DEFAULT_OBL_CODE)
+        obl_code = await resolve_generation_shpi_region_code(
+            session=session,
+            department_id=department_id,
+        )
         suffix = validate_country_suffix(
             await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)
         )
@@ -137,7 +142,8 @@ async def generate_barcode_numbers(
 
         if counter is None:
             raise CounterNotFoundError(
-                f"Counter row for package_type '{normalized_package_type}' was not found."
+                f"Counter row for package_type '{normalized_package_type}' and "
+                f"region_code '{obl_code}' was not found."
             )
 
         start_value = counter.current_value + 1
@@ -173,7 +179,10 @@ async def generate_barcode_numbers_with_history(
     validated_quantity = validate_quantity(quantity)
 
     async with session.begin():
-        obl_code = await get_setting_value(session, "obl_code", DEFAULT_OBL_CODE)
+        obl_code = await resolve_generation_shpi_region_code(
+            session=session,
+            department_id=department_id,
+        )
         suffix = validate_country_suffix(
             await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)
         )
@@ -188,7 +197,8 @@ async def generate_barcode_numbers_with_history(
 
         if counter is None:
             raise CounterNotFoundError(
-                f"Counter row for package_type '{normalized_package_type}' was not found."
+                f"Counter row for package_type '{normalized_package_type}' and "
+                f"region_code '{obl_code}' was not found."
             )
 
         start_value = counter.current_value + 1

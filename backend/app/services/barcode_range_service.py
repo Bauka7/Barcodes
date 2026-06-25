@@ -5,11 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import BarcodeCounter, BarcodeRange, RangeRequest, User
 from app.services.barcode_number_service import (
-    DEFAULT_OBL_CODE,
     MAX_COUNTER_VALUE,
-    get_setting_value,
     validate_package_type,
 )
+from app.services.shpi_region_service import resolve_generation_shpi_region_code
 
 # MVP lifecycle is active -> exhausted or active -> cancelled.
 # Keep "expired" readable for existing rows, but normal flow must not create it.
@@ -33,7 +32,10 @@ async def create_barcode_range_from_request(
     expires_at: datetime | None = None,
 ) -> BarcodeRange:
     package_type = validate_package_type(range_request.package_type)
-    region_code = await get_setting_value(session, "obl_code", DEFAULT_OBL_CODE)
+    region_code = await resolve_generation_shpi_region_code(
+        session=session,
+        department_id=range_request.department_id,
+    )
 
     result = await session.execute(
         select(BarcodeCounter)

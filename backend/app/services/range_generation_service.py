@@ -7,12 +7,12 @@ from app.models import BarcodeRange, GeneratedBatch
 from app.services.barcode_history_service import create_generation_history
 from app.services.barcode_number_service import (
     DEFAULT_COUNTRY_SUFFIX,
-    DEFAULT_OBL_CODE,
     build_barcode_number,
     get_setting_value,
     validate_country_suffix,
     validate_quantity,
 )
+from app.services.shpi_region_service import resolve_generation_shpi_region_code
 
 
 class BarcodeRangeNotFoundError(LookupError):
@@ -104,7 +104,10 @@ async def generate_barcodes_from_range(
                 f"Not enough numbers remaining in range. Remaining: {remaining}."
             )
 
-        obl_code = await get_setting_value(session, "obl_code", DEFAULT_OBL_CODE)
+        obl_code = await resolve_generation_shpi_region_code(
+            session=session,
+            department_id=barcode_range.issued_to_department_id,
+        )
         suffix = validate_country_suffix(
             await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)
         )

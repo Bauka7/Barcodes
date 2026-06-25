@@ -47,6 +47,10 @@ export default function ProfilePage() {
   }
 
   const department = user.department;
+  const shpiRegion =
+    department?.shpi_region_code
+      ? `${department.shpi_region_code}${department.shpi_region_name ? ` — ${department.shpi_region_name}` : ''}`
+      : null;
   const moderator = user.moderator;
   const isAdmin = user.role === 'admin';
   const isOperator = user.role === 'operator';
@@ -136,6 +140,7 @@ export default function ProfilePage() {
             <ValueRow label={t('profile.departmentName')} value={department?.name ?? null} />
             <ValueRow label={t('profile.departmentCode')} value={department?.code ?? null} mono />
             <ValueRow label={t('profile.departmentRegion')} value={department?.region ?? null} />
+            <ValueRow label={t('profile.shpiRegion')} value={shpiRegion} />
             <ValueRow label={t('profile.departmentType')} value={department?.department_type ?? null} />
             <ValueRow label={t('profile.departmentPath')} value={department?.full_path ?? null} />
             <ValueRow label={t('profile.departmentId')} value={user.department_id} mono />

@@ -236,7 +236,7 @@ async def generate_from_range_endpoint(
 
     await safe_log_user_action(
         session=session,
-        action="range_generation_completed",
+                action="shpi_generated",
         user=current_user,
         request=request,
         entity_type="generated_batch",
@@ -358,7 +358,7 @@ async def cancel_range_endpoint(
             await session.refresh(barcode_range)
             await create_audit_log(
                 session=session,
-                action="range_cancelled",
+                action="barcode_range_cancelled",
                 user=current_user,
                 request=request,
                 entity_type="barcode_range",

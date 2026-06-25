@@ -3,9 +3,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db_session
 from app.models import User
+from app.schemas import (
+    MissingShpiRegionDepartmentItem,
+    MissingShpiRegionDepartmentResponse,
+)
 from app.schemas.shpi_map import ShpiMapResponse
 from app.services.audit_service import safe_log_user_action
 from app.services.auth_service import require_roles
+from app.services.department_service import list_departments_missing_shpi_region
 from app.services.filpassport_department_import_service import (
     FilPassportImportError,
     import_departments_from_filpassport,
@@ -26,6 +31,29 @@ async def get_admin_shpi_map(
 ) -> ShpiMapResponse:
     data = await get_shpi_map(session=session)
     return ShpiMapResponse.model_validate(data)
+
+
+@router.get(
+    "/departments/missing-shpi-region",
+    response_model=MissingShpiRegionDepartmentResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_departments_missing_shpi_region(
+    session: AsyncSession = Depends(get_db_session),
+    current_user: User = Depends(require_roles("admin")),
+) -> MissingShpiRegionDepartmentResponse:
+    departments = await list_departments_missing_shpi_region(session=session)
+    items = [
+        MissingShpiRegionDepartmentItem(
+            id=department.id,
+            code=department.code,
+            name=department.name,
+            department_type=department.department_type,
+            full_path=department.full_path,
+        )
+        for department in departments
+    ]
+    return MissingShpiRegionDepartmentResponse(items=items, total=len(items))
 
 
 @router.post(

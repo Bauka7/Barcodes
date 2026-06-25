@@ -1,10 +1,9 @@
 import { apiFetch } from './client';
 import { qs } from '../lib/qs';
-import type { components } from './generated';
+import type { DepartmentItem, DepartmentTreeItem } from './types';
 
 // Типы — из сгенерированного openapi (src/api/generated.ts), не пишем руками.
-export type DepartmentTreeItem = components['schemas']['DepartmentTreeItem'];
-export type DepartmentItem = components['schemas']['DepartmentItem'];
+export type { DepartmentItem, DepartmentTreeItem };
 
 export interface FilPassportDepartmentImportResponse {
   created: number;

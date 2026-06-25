@@ -8,7 +8,13 @@ class ShpiMapCodeItem(BaseModel):
     status: str
 
 
+class ShpiMapRegionItem(BaseModel):
+    code: str
+    name: str
+
+
 class ShpiMapResponse(BaseModel):
+    regions: list[ShpiMapRegionItem]
     region_codes: list[str]
     codes: list[str]
     cells: list[ShpiMapCodeItem]

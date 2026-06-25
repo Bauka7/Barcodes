@@ -12,6 +12,7 @@ from app.core.security import decode_access_token, hash_password, verify_passwor
 from app.db.database import get_db_session
 from app.models import Client, Department, User
 from app.schemas import UserCreate, UserUpdate
+from app.services.audit_service import safe_log_user_action
 from app.services.external_auth_service import (
     ExternalTokenResponse,
     ExternalAuthConfigurationError,
@@ -333,6 +334,15 @@ async def _resolve_external_user(
                 user = await get_user_by_email(session=session, email=email)
             if user is None:
                 raise
+        else:
+            await safe_log_user_action(
+                session=session,
+                action="keycloak_user_auto_created",
+                username=user.username,
+                entity_type="user",
+                entity_id=str(user.id),
+                details={"role": user.role, "source": "keycloak"},
+            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=EXTERNAL_USER_NOT_ACTIVATED_MESSAGE,

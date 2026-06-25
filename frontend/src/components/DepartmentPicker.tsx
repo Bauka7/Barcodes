@@ -60,6 +60,7 @@ export function DepartmentPicker({
               <span className="block truncate text-t1">{selected.name}</span>
               <span className="block truncate font-mono text-[12px] text-t3">
                 {selected.full_path ?? selected.code}
+                {selected.shpi_region_code ? ` — SHPI ${selected.shpi_region_code}` : ''}
               </span>
             </>
           ) : (

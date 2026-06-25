@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.regions import KAZPOST_REGION_CODES
+from app.core.regions import OFFICIAL_SHPI_BRANCH_CODES, KAZPOST_REGION_CODES
 from app.models import BarcodeCodeCatalog, BarcodeCounter
 
 SHPI_COUNTER_MAX_VALUE = 999_999
@@ -55,6 +55,7 @@ async def get_shpi_map(session: AsyncSession) -> dict[str, object]:
             )
 
     return {
+        "regions": OFFICIAL_SHPI_BRANCH_CODES,
         "region_codes": KAZPOST_REGION_CODES,
         "codes": codes,
         "cells": cells,

@@ -56,6 +56,8 @@ class UserDepartmentRead(BaseModel):
     code: str
     name: str
     region: str | None
+    shpi_region_code: str | None = None
+    shpi_region_name: str | None = None
     department_type: str | None
     full_path: str | None
 

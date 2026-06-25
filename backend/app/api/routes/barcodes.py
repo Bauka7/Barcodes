@@ -106,7 +106,7 @@ async def create_barcode_numbers(
 
     await safe_log_user_action(
         session=session,
-        action="barcode_generated",
+        action="shpi_generated",
         user=current_user,
         request=request,
         entity_type="generated_batch",
@@ -716,7 +716,7 @@ async def print_batch_pdf(
 
     await safe_log_user_action(
         session=session,
-        action="client_pdf_downloaded" if current_user.role == "client" else "batch_printed",
+        action="pdf_downloaded" if current_user.role == "client" else "barcode_printed",
         user=current_user,
         request=request,
         entity_type="generated_batch",

@@ -319,7 +319,9 @@ curl "http://127.0.0.1:8000/api/audit-logs?limit=20&offset=0" `
 
 Audit records have optional `department_id`. Admin can read all logs, including global logs where `department_id` is `NULL`. Operator can read only logs with `department_id` inside the operator department subtree; `NULL` global logs and other departments are hidden. Client-role users receive 403.
 
-Filters: `action`, `username`, `entity_type`, `entity_id`, `department_id`, `date_from`, `date_to`, `limit`, `offset`.
+The response contains `items`, `total`, `limit`, and `offset`. Filters: `action`, `username`, `entity_type`, `entity_id`, `department_id`, `date_from`, `date_to`, `limit`, `offset`.
+
+Audited actions include range requests, range issuance/cancellation, SHPI generation, PDF download/print, user changes, department imports, and authentication. Events belonging to a department store its `department_id`; global events, including failed login and FilPassport imports, use `NULL`.
 
 ## SHPI Map
 
@@ -329,7 +331,15 @@ Admin-only counter monitoring:
 GET /api/admin/shpi-map
 ```
 
-The response contains `region_codes` from `01` through `19`, sorted `codes`, and matrix `cells` for each code-region counter value.
+The response contains official QazPost `regions` metadata, `region_codes`, sorted `codes`, and matrix `cells` for each code-region counter value.
+
+Official SHPI branch columns are:
+
+```text
+01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 30, 34
+```
+
+Official mapping is stored in `app.core.regions.OFFICIAL_SHPI_BRANCH_CODES`: `01` Астанинский почтамт, `02` Акмолинский ОФ, `03` Актюбинский ОФ, `04` Алматинский ОФ, `05` Алматинский почтамт, `06` Атырауский ОФ, `07` Восточно-Казахстанский ОФ, `08` Жамбылский ОФ, `09` Западно-Казахстанский ОФ, `10` Карагандинский ОФ, `11` Костанайский ОФ, `12` Кызылординский ОФ, `13` Мангистауский ОФ, `14` Павлодарский ОФ, `15` Северо-Казахстанский ОФ, `16` Шымкентский почтамт, `17` Туркестанский ОФ, `18` Филиал АО "Казпочта" по области Абай, `19` Республиканская служба специальной почтовой связи, `20` Филиал АО "Казпочта" по области Улытау, `30` ИЛЦ "ЮГ", `34` Филиал АО "Казпочта" по области Жетысу.
 
 Cell status is `gray` for missing or zero counters, `green` for counters from `1` to `999998`, and `red` for counters at `999999` or above.
 
@@ -417,6 +427,7 @@ curl "http://127.0.0.1:8000/api/ranges?package_type=KG&status=active" `
 Approval behavior:
 
 - locks `BarcodeCounter` with `SELECT FOR UPDATE`;
+- selects the counter by `package_type + issued department shpi_region_code`;
 - sets `start_number = current_value + 1`;
 - sets `end_number = current_value + requested_quantity`;
 - updates `BarcodeCounter.current_value` to `end_number`;
@@ -507,12 +518,20 @@ curl -X POST "http://127.0.0.1:8000/api/admin/departments/import-filpassport?dry
   -H "Authorization: Bearer ADMIN_TOKEN"
 ```
 
+Diagnostic endpoint for active departments without SHPI region:
+
+```http
+GET /api/admin/departments/missing-shpi-region
+```
+
 Configuration:
 
 - `FILPASSPORT_DEPARTMENTS_URL`, default official `ofrupsall` endpoint.
 - `FILPASSPORT_TIMEOUT_SECONDS`, default `30`.
 
 The FilPassport importer reads `Result -> level -> level2`, stores `DepId` as `departments.external_id`, maps branch/RUPS/department hierarchy to `department_type`, updates existing rows by `external_id` or safe code match, and does not delete departments missing from the source.
+
+It also fills `departments.shpi_region_code` from the official QazPost SHPI branch mapping. Child RUPS/SOPS/department rows inherit the nearest parent code. Unmapped rows stay `NULL` and are returned as warnings. Generation uses `package_type + inherited department shpi_region_code`; if no department code exists, it falls back to `app_settings.obl_code` or `01` and logs a warning.
 
 The importer reads these DBF columns:
 

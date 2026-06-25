@@ -14,6 +14,7 @@ from app.services.auth_service import (
     require_roles,
     update_user,
 )
+from app.services.shpi_region_service import get_inherited_department_shpi_region_code
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -23,14 +24,24 @@ async def _user_profile_to_schema(
     user: User,
 ) -> UserRead:
     department = None
+    department_shpi_region_code = None
     if user.department_id is not None:
         department_result = await session.execute(
             select(Department).where(Department.id == user.department_id)
         )
         department = department_result.scalar_one_or_none()
+        department_shpi_region_code = await get_inherited_department_shpi_region_code(
+            session=session,
+            department_id=user.department_id,
+        )
 
     moderator = await find_nearest_moderator(session=session, department=department)
-    return user_to_schema(user, department=department, moderator=moderator)
+    return user_to_schema(
+        user,
+        department=department,
+        moderator=moderator,
+        department_shpi_region_code=department_shpi_region_code,
+    )
 
 
 @router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
@@ -166,9 +177,13 @@ async def update_user_endpoint(
             await update_user(session=session, user=user, payload=payload)
             await session.flush()
             await session.refresh(user)
+            audit_action = "user_updated"
+            if "is_active" in payload.model_fields_set:
+                audit_action = "user_activated" if user.is_active else "user_deactivated"
+
             await create_audit_log(
                 session=session,
-                action="user_updated",
+                action=audit_action,
                 user=current_user,
                 request=request,
                 entity_type="user",

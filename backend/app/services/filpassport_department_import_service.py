@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.regions import resolve_official_shpi_branch_code
 from app.models import Department
 from app.services.department_import_service import LEGACY_ROOT_CODE, LEGACY_ROOT_NAME
 
@@ -29,6 +30,7 @@ class FilPassportDepartmentRecord:
     region: str
     department_type: str
     is_active: bool
+    shpi_region_code: str | None = None
 
 
 @dataclass(slots=True)
@@ -112,6 +114,7 @@ def _record_from_row(
     department_type: str,
     parent_external_id: str | None,
     parent_code: str | None,
+    shpi_region_code: str | None,
 ) -> FilPassportDepartmentRecord | None:
     external_id = _clean(row.get("DepId"))
     code = _clean(row.get("Code"))
@@ -128,6 +131,17 @@ def _record_from_row(
         region=_clean(row.get("Oblast")) or name,
         department_type=department_type,
         is_active=_is_active(row),
+        shpi_region_code=shpi_region_code,
+    )
+
+
+def _append_missing_shpi_region_warning(
+    errors: list[str],
+    record: FilPassportDepartmentRecord,
+) -> None:
+    errors.append(
+        "Missing SHPI region code for "
+        f"{record.department_type} {record.code} ({record.name})."
     )
 
 
@@ -151,10 +165,13 @@ def normalize_filpassport_response(
             department_type="branch",
             parent_external_id=LEGACY_ROOT_CODE,
             parent_code=LEGACY_ROOT_CODE,
+            shpi_region_code=resolve_official_shpi_branch_code(_clean(branch_row.get("PoName"))),
         )
         if branch is None:
             errors.append("Skipped branch row without DepId, Code, or PoName.")
             continue
+        if branch.shpi_region_code is None:
+            _append_missing_shpi_region_warning(errors, branch)
         records.append(branch)
 
         rups_rows = branch_row.get("level")
@@ -171,10 +188,16 @@ def normalize_filpassport_response(
                 department_type="rups",
                 parent_external_id=branch.external_id,
                 parent_code=branch.code,
+                shpi_region_code=(
+                    resolve_official_shpi_branch_code(_clean(rups_row.get("PoName")))
+                    or branch.shpi_region_code
+                ),
             )
             if rups is None:
                 errors.append(f"Skipped RUPS row under {branch.code} without required fields.")
                 continue
+            if rups.shpi_region_code is None:
+                _append_missing_shpi_region_warning(errors, rups)
             records.append(rups)
 
             department_rows = rups_row.get("level2")
@@ -190,12 +213,18 @@ def normalize_filpassport_response(
                     department_type="department",
                     parent_external_id=rups.external_id,
                     parent_code=rups.code,
+                    shpi_region_code=(
+                        resolve_official_shpi_branch_code(_clean(department_row.get("PoName")))
+                        or rups.shpi_region_code
+                    ),
                 )
                 if department is None:
                     errors.append(
                         f"Skipped department row under {rups.code} without required fields."
                     )
                     continue
+                if department.shpi_region_code is None:
+                    _append_missing_shpi_region_warning(errors, department)
                 records.append(department)
 
     return records, errors
@@ -369,6 +398,7 @@ async def import_departments_from_filpassport(
                 department_type="root",
                 full_path=LEGACY_ROOT_NAME,
                 is_active=True,
+                shpi_region_code=None,
             )
             session.add(root_department)
             created += 1
@@ -381,6 +411,7 @@ async def import_departments_from_filpassport(
             root_department.department_type = "root"
             root_department.full_path = LEGACY_ROOT_NAME
             root_department.is_active = True
+            root_department.shpi_region_code = None
             updated += 1
 
         departments_by_external_id[LEGACY_ROOT_CODE] = root_department
@@ -405,6 +436,7 @@ async def import_departments_from_filpassport(
                     code=record.code,
                     name=record.name,
                     region=record.region,
+                    shpi_region_code=record.shpi_region_code,
                     department_type=record.department_type,
                     is_active=record.is_active,
                 )
@@ -415,6 +447,7 @@ async def import_departments_from_filpassport(
                 department.code = record.code
                 department.name = record.name
                 department.region = record.region
+                department.shpi_region_code = record.shpi_region_code
                 department.department_type = record.department_type
                 department.is_active = record.is_active
                 updated += 1

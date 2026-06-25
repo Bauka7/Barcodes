@@ -181,7 +181,7 @@ export default function AuditPage() {
         <>
           <DataTable
             columns={columns}
-            rows={data ?? []}
+            rows={data?.items ?? []}
             rowKey={(r) => r.id}
             loading={isLoading}
             empty={t('audit.empty')}
@@ -189,8 +189,8 @@ export default function AuditPage() {
           <Pagination
             offset={offset}
             limit={LIMIT}
-            shown={data?.length ?? 0}
-            hasNext={(data?.length ?? 0) === LIMIT}
+            shown={data?.items.length ?? 0}
+            total={data?.total}
             onChange={setOffset}
           />
         </>

@@ -229,7 +229,7 @@ async def approve_range_request_endpoint(
             )
             await create_audit_log(
                 session=session,
-                action="range_created",
+                action="barcode_range_issued",
                 user=current_user,
                 request=request,
                 entity_type="barcode_range",

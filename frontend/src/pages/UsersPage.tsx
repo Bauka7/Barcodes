@@ -44,15 +44,16 @@ function flattenDepartmentOptions(nodes: DepartmentTreeItem[]): DepartmentOption
   const walk = (items: DepartmentTreeItem[], parents: string[]) => {
     for (const item of items) {
       const code = item.code ? ` (${item.code})` : '';
+      const shpi = item.shpi_region_code ? ` — SHPI ${item.shpi_region_code}` : '';
       const fallbackPath = [...parents, item.name].join(' / ');
       const displayName = item.full_path || fallbackPath || item.name;
-      const shortName = `${item.name}${code}`;
+      const shortName = `${item.name}${code}${shpi}`;
 
       out.push({
         id: item.id,
-        displayName: `${displayName}${code}`,
+        displayName: `${displayName}${code}${shpi}`,
         shortName,
-        searchText: `${displayName} ${shortName} ${item.code ?? ''}`.toLowerCase(),
+        searchText: `${displayName} ${shortName} ${item.code ?? ''} ${item.shpi_region_code ?? ''}`.toLowerCase(),
       });
 
       if (item.children?.length) {

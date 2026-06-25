@@ -14,6 +14,7 @@ class Department(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(50), index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     region: Mapped[str] = mapped_column(String(255), nullable=False)
+    shpi_region_code: Mapped[str | None] = mapped_column(String(2), index=True, nullable=True)
     parent_id: Mapped[int | None] = mapped_column(
         ForeignKey("departments.id", ondelete="SET NULL"),
         index=True,

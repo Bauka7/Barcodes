@@ -151,7 +151,9 @@ Import official KazPost departments from FilPassport API:
 python -m app.db.import_filpassport_departments
 ```
 
-The range workflow also uses the same `barcode_counters` table. Counters are tracked by `package_type` and `region_code`; existing legacy counters are stored under the configured `obl_code` region, usually `01`. Approving a range request reserves numbers by incrementing the package counter for the current `obl_code`. Generating from a range later creates `GeneratedBatch` and `GeneratedBarcode` rows with `source = "range"`.
+FilPassport import fills `departments.shpi_region_code` from the official QazPost SHPI branch mapping. Child RUPS/SOPS/department rows inherit the nearest parent SHPI branch code. Unmapped rows stay `NULL` and are reported as warnings.
+
+The range workflow also uses the same `barcode_counters` table. Counters are tracked by `package_type` and `region_code`; existing legacy counters are stored under the configured `obl_code` region, usually `01`. Direct generation and range approval now select counters by `package_type + department SHPI region code`. If the department chain has no `shpi_region_code`, generation falls back to `app_settings.obl_code` or `01` and logs a warning. Generating from a range later creates `GeneratedBatch` and `GeneratedBarcode` rows with `source = "range"`.
 
 MVP ownership is department-based. Admin sees all data, operators see their own department subtree, and client-role users see only their own department. `/api/clients` and the `clients` table remain only for legacy compatibility and are hidden from the active frontend flow.
 
@@ -434,7 +436,9 @@ Admin sees all audit logs, including global logs with `department_id = NULL`.
 Operator sees only logs whose `department_id` is inside the operator department subtree.
 Client-role users cannot access audit logs.
 
-Supported filters: `action`, `username`, `entity_type`, `entity_id`, `department_id`, `date_from`, `date_to`, `limit`, `offset`.
+The response contains `items`, `total`, `limit`, and `offset`. Supported filters: `action`, `username`, `entity_type`, `entity_id`, `department_id`, `date_from`, `date_to`, `limit`, `offset`.
+
+Examples of audited events include range-request decisions, barcode-range issuance/cancellation, SHPI generation, PDF download/print, user changes, department imports, and authentication events. New department-owned events store `department_id`; global events such as failed login and FilPassport imports keep it `NULL`.
 
 Admin SHPI Map, counter monitoring only:
 
@@ -442,6 +446,10 @@ Admin SHPI Map, counter monitoring only:
 curl "http://127.0.0.1:8000/api/admin/shpi-map" `
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
+
+The SHPI Map uses the official QazPost branch columns: `01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 30, 34`. The response includes `regions` metadata, `region_codes`, sorted SHPI `codes`, and matrix `cells`.
+
+Official SHPI branch mapping is stored in `app.core.regions.OFFICIAL_SHPI_BRANCH_CODES`: `01` Астанинский почтамт, `02` Акмолинский ОФ, `03` Актюбинский ОФ, `04` Алматинский ОФ, `05` Алматинский почтамт, `06` Атырауский ОФ, `07` Восточно-Казахстанский ОФ, `08` Жамбылский ОФ, `09` Западно-Казахстанский ОФ, `10` Карагандинский ОФ, `11` Костанайский ОФ, `12` Кызылординский ОФ, `13` Мангистауский ОФ, `14` Павлодарский ОФ, `15` Северо-Казахстанский ОФ, `16` Шымкентский почтамт, `17` Туркестанский ОФ, `18` Филиал АО "Казпочта" по области Абай, `19` Республиканская служба специальной почтовой связи, `20` Филиал АО "Казпочта" по области Улытау, `30` ИЛЦ "ЮГ", `34` Филиал АО "Казпочта" по области Жетысу.
 
 ## Barcode Format
 
@@ -463,13 +471,13 @@ Rules:
 - Package type must exist in `barcode_counters`.
 - Each package type has its own counter.
 - Counters are region-aware: `barcode_counters` is unique by `package_type + region_code`.
-- `obl_code` comes from `app_settings`.
-- Default `obl_code` is `01`.
+- The 2-digit SHPI branch code comes from the target department's inherited `shpi_region_code`.
+- If no department SHPI region is configured, fallback is `app_settings.obl_code`, then `01`.
 - Default `country_suffix` is `KZ`.
 - Quantity must be from `1` to `1000`.
 - Counter update and history insert are atomic.
 - Range approval also uses `SELECT FOR UPDATE` on `barcode_counters`.
-- Direct generation and range approval select counters by package type and current `obl_code`.
+- Direct generation and range approval select counters by package type and department SHPI region code.
 - Range approval creates a `barcode_ranges` row.
 - Range generation uses `SELECT FOR UPDATE` on `barcode_ranges`.
 - Range generation creates `GeneratedBatch` and `GeneratedBarcode` rows linked by `range_id`.

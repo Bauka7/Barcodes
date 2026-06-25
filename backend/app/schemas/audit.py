@@ -18,3 +18,10 @@ class AuditLogItem(BaseModel):
     user_agent: str | None
     details: str | None
     created_at: datetime
+
+
+class AuditLogListResponse(BaseModel):
+    items: list[AuditLogItem]
+    total: int
+    limit: int
+    offset: int

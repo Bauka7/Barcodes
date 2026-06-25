@@ -81,8 +81,23 @@ function TreeNode({ node, depth, selectedId, onSelect, forceOpen }: NodeProps) {
             }`}
           />
           <span className={`truncate ${selected ? 'text-brand-dark' : ''}`}>{node.name}</span>
+          {node.department_type ? (
+            <span className="rounded-full bg-bg2 px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-t3">
+              {node.department_type}
+            </span>
+          ) : null}
         </div>
-        <span className="shrink-0 pr-2 font-mono text-[12px] text-t3">{node.code}</span>
+        <span className="flex shrink-0 items-center gap-1 pr-2 font-mono text-[12px] text-t3">
+          {node.shpi_region_code ? (
+            <span
+              className="rounded-full border border-bd3 bg-bg1 px-1.5 py-0.5 text-[11px] text-t2"
+              title={node.shpi_region_name ?? undefined}
+            >
+              SHPI {node.shpi_region_code}
+            </span>
+          ) : null}
+          <span>{node.code}</span>
+        </span>
       </div>
 
       {hasChildren && isOpen && (
@@ -108,7 +123,10 @@ function filterTree(nodes: DepartmentTreeItem[], q: string): DepartmentTreeItem[
   const res: DepartmentTreeItem[] = [];
   for (const n of nodes) {
     const kids = n.children?.length ? filterTree(n.children, q) : [];
-    const self = n.name.toLowerCase().includes(q) || n.code.toLowerCase().includes(q);
+    const self =
+      n.name.toLowerCase().includes(q) ||
+      n.code.toLowerCase().includes(q) ||
+      (n.shpi_region_code ?? '').toLowerCase().includes(q);
     if (self || kids.length) {
       res.push({ ...n, children: kids.length ? kids : self ? (n.children ?? []) : [] });
     }

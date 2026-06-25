@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.regions import OFFICIAL_SHPI_BRANCH_NAME_BY_CODE
 from app.db.database import get_db_session
 from app.models import User
 from app.schemas import DepartmentItem, DepartmentTreeItem
@@ -47,6 +48,12 @@ async def get_departments(
             code=department.code,
             name=department.name,
             region=department.region,
+            shpi_region_code=department.shpi_region_code,
+            shpi_region_name=(
+                OFFICIAL_SHPI_BRANCH_NAME_BY_CODE.get(department.shpi_region_code)
+                if department.shpi_region_code
+                else None
+            ),
             parent_id=department.parent_id,
             department_type=department.department_type,
             full_path=department.full_path,

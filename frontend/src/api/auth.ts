@@ -24,6 +24,8 @@ export interface Me {
     code: string;
     name: string;
     region: string | null;
+    shpi_region_code: string | null;
+    shpi_region_name: string | null;
     department_type: string | null;
     full_path: string | null;
   } | null;

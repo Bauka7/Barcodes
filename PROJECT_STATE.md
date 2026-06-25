@@ -21,7 +21,7 @@ The backend currently supports:
 - Legacy clients API, range requests, and barcode range allocation foundation.
 - SHPI generation from allocated barcode ranges.
 - Individual barcode lifecycle tracking.
-- SHPI Map for monitoring counters by SHPI code and region.
+- SHPI Map for monitoring counters by SHPI code and official QazPost SHPI branch region.
 
 The backend intentionally does not include:
 
@@ -131,6 +131,7 @@ Fields:
 - `code`
 - `name`
 - `region`
+- `shpi_region_code`
 - `parent_id`
 - `department_type`
 - `full_path`
@@ -138,6 +139,33 @@ Fields:
 - `created_at`
 
 Used to store the imported KazPost department hierarchy from the legacy DBF file or the official FilPassport API. FilPassport `DepId` is stored as `external_id`.
+
+`shpi_region_code` stores the official QazPost SHPI branch code for generation and counter selection. FilPassport import assigns it to known top-level branches and children inherit the nearest parent branch code. Unmapped departments keep `NULL`.
+
+Official SHPI branch code mapping:
+
+- `01` — Астанинский почтамт
+- `02` — Акмолинский ОФ
+- `03` — Актюбинский ОФ
+- `04` — Алматинский ОФ
+- `05` — Алматинский почтамт
+- `06` — Атырауский ОФ
+- `07` — Восточно-Казахстанский ОФ
+- `08` — Жамбылский ОФ
+- `09` — Западно-Казахстанский ОФ
+- `10` — Карагандинский ОФ
+- `11` — Костанайский ОФ
+- `12` — Кызылординский ОФ
+- `13` — Мангистауский ОФ
+- `14` — Павлодарский ОФ
+- `15` — Северо-Казахстанский ОФ
+- `16` — Шымкентский почтамт
+- `17` — Туркестанский ОФ
+- `18` — Филиал АО "Казпочта" по области Абай
+- `19` — Республиканская служба специальной почтовой связи
+- `20` — Филиал АО "Казпочта" по области Улытау
+- `30` — ИЛЦ "ЮГ"
+- `34` — Филиал АО "Казпочта" по области Жетысу
 
 ### GeneratedBatch
 
@@ -414,13 +442,23 @@ Query params:
 
 Admin sees all logs, including global `department_id = NULL` logs. Operator sees only logs from the operator department subtree and cannot read global logs. Client-role users receive 403.
 
+The list response is paginated: `items`, `total`, `limit`, and `offset`.
+
+Examples of logged events: range request creation and decisions, barcode range issuance/cancellation, SHPI generation, PDF download/print, user changes, FilPassport department import, and authentication. Department-owned events store `department_id`; global events such as failed logins and imports use `NULL`.
+
 ### Admin SHPI Map
 
 ```http
 GET /api/admin/shpi-map
 ```
 
-Admin only. Returns `region_codes`, sorted `codes`, and matrix `cells` for counter monitoring. It does not calculate remaining totals, generated totals, printed totals, reports, analytics, or department statistics.
+Admin only. Returns official `regions` metadata, `region_codes`, sorted `codes`, and matrix `cells` for counter monitoring. Official columns are `01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 30, 34`. It does not calculate remaining totals, generated totals, printed totals, reports, analytics, or department statistics.
+
+```http
+GET /api/admin/departments/missing-shpi-region
+```
+
+Admin only. Returns active departments where `shpi_region_code IS NULL`.
 
 ### Clients
 
@@ -636,7 +674,7 @@ KG015778998KZ
 Breakdown:
 
 - `KG`: package type.
-- `01`: oblast code from `AppSetting.obl_code`.
+- `01`: SHPI branch code from the target department's inherited `shpi_region_code`.
 - `577899`: 6-digit counter value.
 - `8`: calculated check digit.
 - `KZ`: suffix from `AppSetting.country_suffix`.
@@ -646,7 +684,7 @@ Rules:
 - `package_type` must be exactly two uppercase Latin letters.
 - A package type is valid only if a matching row exists in `barcode_counters`.
 - `quantity` must be between `1` and `1000`.
-- `obl_code` must be exactly two digits.
+- SHPI branch code must be exactly two digits.
 - Counter values are zero-padded to six digits.
 - Maximum counter value is `999999`.
 - Batch generation locks the counter once and increments it by the full quantity.
@@ -696,7 +734,7 @@ Important decisions:
   `VC, KG, ON, AD, BP, CE, GF, RZ, AV, UP, CP, CZ, RC, CC, VR, CV, MM, UB, PP, DQ, UE, UO, CF, RW, RG, LR`
 - Existing earlier package types are still seeded for compatibility:
   `GP, CO, GB, RR`
-- Default `obl_code` is `01`.
+- Default `obl_code` is `01` and is now a fallback when a department has no inherited `shpi_region_code`.
 - Legacy `options.ini` import intentionally overwrites `obl_code` and counter values to match legacy runtime state.
 - `options.ini` loader is robust against garbage/service text before `[MainSettings]`.
 - Loader tries encodings: `utf-8-sig`, `cp1251`, `utf-8`.
@@ -942,6 +980,7 @@ Migration files:
 - `0016_add_phone_to_users.py`
 - `0017_add_department_external_fields.py`
 - `0018_add_department_id_to_audit_logs.py`
+- `0019_add_shpi_region_code_to_departments.py`
 
 Common commands from `backend/`:
 
@@ -968,7 +1007,7 @@ When adding models, register them in `app/models/__init__.py` so Alembic can see
 - Existing seed data must not be overwritten.
 - Legacy options import is the exception: it intentionally overwrites counters and `obl_code`.
 - Package type validation should rely on the `barcode_counters` table, not a small hardcoded list.
-- Counter lookup for generation uses `package_type` plus the current `obl_code` as `region_code`.
+- Counter lookup for generation and range approval uses `package_type` plus the target department's inherited `shpi_region_code` as `region_code`; fallback is `app_settings.obl_code`, then `01`, with a warning log.
 - Missing counter row should return a clear error.
 - MVP UI is department-centric and hides client-company management.
 - Staff-created range requests may be department-only with `client_id = null`.

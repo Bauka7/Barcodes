@@ -39,12 +39,55 @@ export type UserRead = S['UserRead'];
 export type UserCreate = S['UserCreate'];
 export type UserUpdate = S['UserUpdate'];
 
-export type AuditLogItem = S['AuditLogItem'] & {
-  department_id?: number | null;
-  department_name?: string | null;
-  department_code?: string | null;
-  department_full_path?: string | null;
-};
+// Kept explicit until the checked-in OpenAPI client is regenerated.
+export interface AuditLogItem {
+  id: number;
+  user_id: number | null;
+  department_id: number | null;
+  department_name: string | null;
+  department_code: string | null;
+  department_full_path: string | null;
+  username: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  details: string | null;
+  created_at: string;
+}
 
-export type DepartmentItem = S['DepartmentItem'];
-export type DepartmentTreeItem = S['DepartmentTreeItem'];
+export interface AuditLogListResponse {
+  items: AuditLogItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+// Kept explicit until the checked-in OpenAPI client is regenerated.
+export interface DepartmentItem {
+  id: number;
+  external_id: string | null;
+  code: string;
+  name: string;
+  region: string;
+  shpi_region_code: string | null;
+  shpi_region_name: string | null;
+  parent_id: number | null;
+  department_type: string | null;
+  full_path: string | null;
+  is_active: boolean;
+}
+
+export interface DepartmentTreeItem {
+  id: number;
+  external_id: string | null;
+  code: string;
+  name: string;
+  shpi_region_code: string | null;
+  shpi_region_name: string | null;
+  department_type: string | null;
+  full_path: string | null;
+  is_active: boolean;
+  children: DepartmentTreeItem[];
+}

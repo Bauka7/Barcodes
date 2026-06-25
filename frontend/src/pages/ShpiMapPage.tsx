@@ -42,6 +42,7 @@ export default function ShpiMapPage() {
   });
 
   const regionCodes = data?.region_codes ?? [];
+  const regionByCode = new Map((data?.regions ?? []).map((region) => [region.code, region]));
   const codes = data?.codes ?? [];
   const cellMap = buildCellMap(data?.cells ?? []);
 
@@ -73,6 +74,7 @@ export default function ShpiMapPage() {
                   <th
                     key={regionCode}
                     className="bg-bg2 px-3 py-2 text-right font-normal text-t2"
+                    title={regionByCode.get(regionCode)?.name ?? regionCode}
                   >
                     {regionCode}
                   </th>

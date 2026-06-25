@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token
 from app.core.config import get_settings
+from app.core.regions import OFFICIAL_SHPI_BRANCH_NAME_BY_CODE
 from app.db.database import get_db_session
 from app.models import Department, User
 from app.schemas import Token, UserRead
@@ -15,6 +16,7 @@ from app.services.auth_service import (
     authenticate_user,
     get_current_user,
 )
+from app.services.shpi_region_service import get_inherited_department_shpi_region_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -49,7 +51,13 @@ def user_to_schema(
     user: User,
     department: Department | None = None,
     moderator: User | None = None,
+    department_shpi_region_code: str | None = None,
 ) -> UserRead:
+    shpi_region_code = (
+        department_shpi_region_code
+        if department_shpi_region_code is not None
+        else department.shpi_region_code if department is not None else None
+    )
     return UserRead(
         id=user.id,
         username=user.username,
@@ -67,6 +75,12 @@ def user_to_schema(
                 "code": department.code,
                 "name": department.name,
                 "region": department.region,
+                "shpi_region_code": shpi_region_code,
+                "shpi_region_name": (
+                    OFFICIAL_SHPI_BRANCH_NAME_BY_CODE.get(shpi_region_code)
+                    if shpi_region_code
+                    else None
+                ),
                 "department_type": department.department_type,
                 "full_path": department.full_path,
             }
@@ -270,11 +284,16 @@ async def read_current_user(
     session: AsyncSession = Depends(get_db_session),
 ) -> UserRead:
     department = None
+    department_shpi_region_code = None
     if current_user.department_id is not None:
         result = await session.execute(
             select(Department).where(Department.id == current_user.department_id)
         )
         department = result.scalar_one_or_none()
+        department_shpi_region_code = await get_inherited_department_shpi_region_code(
+            session=session,
+            department_id=current_user.department_id,
+        )
 
     moderator = await find_nearest_moderator(session=session, department=department)
 
@@ -282,4 +301,5 @@ async def read_current_user(
         current_user,
         department=department,
         moderator=moderator,
+        department_shpi_region_code=department_shpi_region_code,
     )

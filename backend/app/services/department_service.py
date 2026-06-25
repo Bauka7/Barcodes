@@ -1,6 +1,7 @@
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.regions import OFFICIAL_SHPI_BRANCH_NAME_BY_CODE
 from app.models import Department
 
 
@@ -50,6 +51,18 @@ async def list_departments(
     return list(result.scalars().all())
 
 
+async def list_departments_missing_shpi_region(
+    session: AsyncSession,
+) -> list[Department]:
+    result = await session.execute(
+        select(Department)
+        .where(Department.is_active.is_(True))
+        .where(Department.shpi_region_code.is_(None))
+        .order_by(Department.parent_id, Department.name)
+    )
+    return list(result.scalars().all())
+
+
 async def get_departments_tree(
     session: AsyncSession,
     department_ids: list[int] | None = None,
@@ -76,6 +89,12 @@ async def get_departments_tree(
             "external_id": department.external_id,
             "code": department.code,
             "name": department.name,
+            "shpi_region_code": department.shpi_region_code,
+            "shpi_region_name": (
+                OFFICIAL_SHPI_BRANCH_NAME_BY_CODE.get(department.shpi_region_code)
+                if department.shpi_region_code
+                else None
+            ),
             "department_type": department.department_type,
             "full_path": department.full_path,
             "is_active": department.is_active,
