@@ -1,6 +1,6 @@
 import { apiFetch } from './client';
 import { qs } from '../lib/qs';
-import type { AuditLogListResponse } from './types';
+import type { AuditLogItem, AuditLogListResponse } from './types';
 
 export interface AuditParams {
   limit?: number;
@@ -13,5 +13,24 @@ export interface AuditParams {
   date_from?: string;
   date_to?: string;
 }
-export const listAuditLogs = (p: AuditParams = {}): Promise<AuditLogListResponse> =>
-  apiFetch<AuditLogListResponse>(`/audit-logs${qs({ ...p })}`);
+
+function normalizeAuditResponse(
+  data: AuditLogListResponse | AuditLogItem[],
+  params: AuditParams,
+): AuditLogListResponse {
+  if (Array.isArray(data)) {
+    return {
+      items: data,
+      total: data.length,
+      limit: params.limit ?? data.length,
+      offset: params.offset ?? 0,
+    };
+  }
+
+  return data;
+}
+
+export const listAuditLogs = async (p: AuditParams = {}): Promise<AuditLogListResponse> => {
+  const data = await apiFetch<AuditLogListResponse | AuditLogItem[]>(`/audit-logs${qs({ ...p })}`);
+  return normalizeAuditResponse(data, p);
+};
