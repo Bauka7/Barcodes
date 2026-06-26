@@ -21,5 +21,16 @@ export interface ShpiMapResponse {
   cells: ShpiMapCodeItem[];
 }
 
+export interface OfficialShpiCounterItem {
+  package_type: string;
+  region_code: string;
+  current_value: number;
+  used_count: number;
+  last_used_date: string | null;
+}
+
 export const getShpiMap = (): Promise<ShpiMapResponse> =>
   apiFetch<ShpiMapResponse>('/admin/shpi-map');
+
+export const getOfficialShpiCounters = (): Promise<OfficialShpiCounterItem[]> =>
+  apiFetch<OfficialShpiCounterItem[]>('/admin/official-shpi/counters');

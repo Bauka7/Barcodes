@@ -1,0 +1,153 @@
+erDiagram
+    DEPARTMENTS ||--o{ DEPARTMENTS : parent_of
+    DEPARTMENTS ||--o{ USERS : contains
+    CLIENTS ||--o{ USERS : has
+    USERS ||--o{ RANGE_REQUESTS : creates
+    USERS ||--o{ RANGE_REQUESTS : handles
+    CLIENTS ||--o{ RANGE_REQUESTS : owns
+    DEPARTMENTS ||--o{ RANGE_REQUESTS : requests_for
+    RANGE_REQUESTS ||--o| BARCODE_RANGES : approved_as
+    CLIENTS ||--o{ BARCODE_RANGES : issued_to
+    DEPARTMENTS ||--o{ BARCODE_RANGES : receives
+    USERS ||--o{ BARCODE_RANGES : issues
+    BARCODE_RANGES ||--o{ GENERATED_BATCHES : source_for
+    DEPARTMENTS ||--o{ GENERATED_BATCHES : owns
+    GENERATED_BATCHES ||--o{ GENERATED_BARCODES : contains
+    BARCODE_RANGES ||--o{ GENERATED_BARCODES : allocates
+    DEPARTMENTS ||--o{ GENERATED_BARCODES : owns
+    GENERATED_BATCHES ||--o{ PRINTED_BATCHES : printed_as
+    DEPARTMENTS ||--o{ PRINTED_BATCHES : prints
+    USERS ||--o{ AUDIT_LOGS : actor
+    DEPARTMENTS ||--o{ AUDIT_LOGS : scoped_to
+    BARCODE_CODE_CATALOG ||--o{ BARCODE_COUNTERS : logical_package_code
+    BARCODE_COUNTERS ||--o{ BARCODE_RANGES : logical_package_region
+
+    DEPARTMENTS {
+        int id PK
+        string code UK
+        string name
+        string region
+        int parent_id FK
+        string external_id UK
+        string department_type
+        string full_path
+        string shpi_region_code
+        bool is_active
+    }
+
+    USERS {
+        int id PK
+        string username UK
+        string role
+        int department_id FK
+        int client_id FK
+        string email
+        bool is_active
+    }
+
+    CLIENTS {
+        int id PK
+        string name UK
+        string contact_person
+        string email
+        bool is_active
+    }
+
+    BARCODE_CODE_CATALOG {
+        int id PK
+        string code UK
+        string name
+        string category
+        string status
+        string owner
+    }
+
+    BARCODE_COUNTERS {
+        int id PK
+        string package_type UK
+        string region_code UK
+        int current_value
+    }
+
+    RANGE_REQUESTS {
+        int id PK
+        int requester_id FK
+        int client_id FK
+        int department_id FK
+        string package_type
+        int requested_quantity
+        string status
+        int handled_by FK
+        string approved_code
+    }
+
+    BARCODE_RANGES {
+        int id PK
+        string package_type
+        string region_code
+        int start_number
+        int end_number
+        int current_number
+        string status
+        int issued_to_department_id FK
+        int issued_to_client_id FK
+        int request_id FK
+        int issued_by FK
+    }
+
+    GENERATED_BATCHES {
+        int id PK
+        string package_type
+        int quantity
+        string first_barcode
+        string last_barcode
+        int department_id FK
+        int range_id FK
+        string source
+        string status
+    }
+
+    GENERATED_BARCODES {
+        int id PK
+        int batch_id FK
+        string barcode UK
+        string package_type
+        int department_id FK
+        int range_id FK
+        int sequence_number
+        string status
+        bool printed
+    }
+
+    PRINTED_BATCHES {
+        int id PK
+        int generated_batch_id FK
+        int department_id FK
+        int printed_count
+        string first_barcode
+        string last_barcode
+        string printed_by
+        string status
+    }
+
+    AUDIT_LOGS {
+        int id PK
+        int user_id FK
+        int department_id FK
+        string username
+        string action
+        string entity_type
+        string entity_id
+        datetime created_at
+    }
+
+    APP_SETTINGS {
+        int id PK
+        string key UK
+        string value
+    }
+
+    ALEMBIC_VERSION {
+        string version_num PK
+    }
+

@@ -1,0 +1,47 @@
+flowchart TD
+    RootDepartment["Department tree<br/>departments.parent_id"]
+    Department["User department<br/>departments.shpi_region_code"]
+    ChildDepartment["Child departments<br/>operator subtree scope"]
+    User["User<br/>admin / operator / client"]
+    ClientUser["Client user<br/>own department only"]
+    Operator["Operator/admin<br/>approves in allowed scope"]
+    RangeRequest["RangeRequest<br/>requested_quantity + package_type"]
+    BarcodeCounter["BarcodeCounter<br/>package_type + region_code<br/>unique counter row"]
+    BarcodeRange["BarcodeRange<br/>start/end/current<br/>stored region_code"]
+    GeneratedBatch["GeneratedBatch<br/>generation header"]
+    GeneratedBarcode["GeneratedBarcode<br/>full SHPI barcode"]
+    PrintedBatch["PrintedBatch<br/>print history"]
+    AuditLog["AuditLog<br/>action + user_id + department_id"]
+
+    RootDepartment -->|"parent/children hierarchy"| Department
+    Department -->|"may contain"| ChildDepartment
+    Department -->|"department_id"| User
+    User -->|"client role"| ClientUser
+
+    ClientUser -->|"creates request for own department"| RangeRequest
+    Operator -->|"reviews and approves"| RangeRequest
+    RangeRequest -->|"approval resolves department SHPI region once"| BarcodeRange
+
+    Department -->|"provides shpi_region_code"| BarcodeRange
+    BarcodeCounter -->|"allocates sequence for package_type + region_code"| BarcodeRange
+    BarcodeRange -->|"source of truth for region_code"| GeneratedBatch
+    BarcodeRange -->|"allocates sequence numbers"| GeneratedBarcode
+    GeneratedBatch -->|"contains"| GeneratedBarcode
+    GeneratedBatch -->|"can be printed as"| PrintedBatch
+
+    User -->|"important actions"| AuditLog
+    Operator -->|"approval action"| AuditLog
+    BarcodeRange -->|"range issue/cancel/generate actions"| AuditLog
+    GeneratedBarcode -->|"generation/print/use/cancel actions"| AuditLog
+    Department -->|"audit scope"| AuditLog
+
+    classDef reference fill:#eef7ff,stroke:#2b6cb0,color:#1a365d
+    classDef operational fill:#fff7ed,stroke:#c05621,color:#7b341e
+    classDef generated fill:#f0fff4,stroke:#2f855a,color:#22543d
+    classDef audit fill:#faf5ff,stroke:#6b46c1,color:#44337a
+
+    class RootDepartment,Department,ChildDepartment reference
+    class User,ClientUser,Operator,RangeRequest,BarcodeCounter,BarcodeRange operational
+    class GeneratedBatch,GeneratedBarcode,PrintedBatch generated
+    class AuditLog audit
+

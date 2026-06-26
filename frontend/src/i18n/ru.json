@@ -296,10 +296,69 @@
     "counter": "Счетчик",
     "state": "Состояние",
     "empty": "Кодов нет",
+    "tabs": {
+      "officialMap": "Реальная карта",
+      "officialDetails": "Реальные данные",
+      "source": "Источник данных",
+      "localDiagnostic": "Локальная карта / Диагностика"
+    },
     "status": {
       "green": "Используется",
       "gray": "Не использовался",
       "red": "Исчерпан"
+    },
+    "official": {
+      "refresh": "Обновить из toolpar",
+      "refreshing": "Обновление…",
+      "empty": "Реальных счетчиков нет",
+      "summary": {
+        "total": "Всего комбинаций",
+        "packageTypes": "Типов отправлений",
+        "regionCodes": "Регионов",
+        "active": "Активных счетчиков",
+        "exhausted": "Исчерпанных счетчиков"
+      },
+      "filters": {
+        "packageType": "package_type",
+        "regionCode": "region_code",
+        "status": "Статус",
+        "allRegions": "Все регионы",
+        "allStatuses": "Все статусы"
+      },
+      "columns": {
+        "packageType": "package_type",
+        "regionCode": "region_code",
+        "currentValue": "current_value",
+        "usedCount": "used_count",
+        "lastUsedDate": "last_used_date",
+        "status": "status"
+      },
+      "status": {
+        "active": "Активный",
+        "exhausted": "Исчерпан",
+        "empty": "Пустой"
+      },
+      "errors": {
+        "forbidden": "Недостаточно прав для просмотра реальных данных.",
+        "unavailable": "Внешняя база ШПИ недоступна.",
+        "disabled": "Интеграция с внешней базой ШПИ отключена.",
+        "generic": "Не удалось загрузить реальные данные ШПИ."
+      }
+    },
+    "officialMap": {
+      "note": "Основная карта строится из реальных read-only данных toolpar, а не из локальных counters/options.ini."
+    },
+    "source": {
+      "title": "Источник данных",
+      "database": "База данных",
+      "table": "Таблица",
+      "shpiColumn": "SHPI column",
+      "dateColumn": "Date column",
+      "example": "Пример разбора ШПИ",
+      "note": "Данные отображаются в режиме read-only. Локальные счётчики не изменяются."
+    },
+    "localDiagnostic": {
+      "note": "Это локальные counters. Основная реальная карта строится из toolpar."
     }
   },
   "clients": {

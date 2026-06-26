@@ -21,6 +21,12 @@ from app.schemas.department import (
     MissingShpiRegionDepartmentResponse,
 )
 from app.schemas.print import PrintedBatchItem, PrintBatchRequest
+from app.schemas.official_shpi import (
+    OfficialShpiConnectionResponse,
+    OfficialShpiCounterItem,
+    OfficialShpiPreviewItem,
+    OfficialShpiSyncResponse,
+)
 from app.schemas.range_request import (
     RangeRequestCreate,
     RangeRequestDecision,
@@ -59,6 +65,10 @@ __all__ = [
     "GeneratedBatchItem",
     "PrintedBatchItem",
     "PrintBatchRequest",
+    "OfficialShpiConnectionResponse",
+    "OfficialShpiCounterItem",
+    "OfficialShpiPreviewItem",
+    "OfficialShpiSyncResponse",
     "RangeRequestCreate",
     "RangeRequestDecision",
     "RangeRequestRead",

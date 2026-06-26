@@ -343,6 +343,92 @@ Official mapping is stored in `app.core.regions.OFFICIAL_SHPI_BRANCH_CODES`: `01
 
 Cell status is `gray` for missing or zero counters, `green` for counters from `1` to `999998`, and `red` for counters at `999999` or above.
 
+## Official SHPI read-only database integration
+
+QazPostWeb can optionally read real SHPI usage from a second, external PostgreSQL database named `toolpar`. This does not replace the local `DATABASE_URL`; it is an independent read-only connection used for safe read-only visualization and admin-only sync.
+
+Environment variables:
+
+```text
+OFFICIAL_SHPI_DB_ENABLED=false
+OFFICIAL_SHPI_DATABASE_URL=
+OFFICIAL_SHPI_TABLE=public.a_mail
+OFFICIAL_SHPI_BARCODE_COLUMN=mail_id_
+OFFICIAL_SHPI_DATE_COLUMN=mail_register_date_
+```
+
+Security rules:
+
+- Keep `OFFICIAL_SHPI_DB_ENABLED=false` unless the external read-only database URL is configured.
+- Provide the external database password only through environment variables or a secret manager.
+- Do not commit the full external database URL, password, or credentials.
+- Use a read-only PostgreSQL user for the external database.
+- The service performs only `SELECT` queries against the external database.
+- Admin/operator/client users can view read-only preview and counter aggregation.
+- Admin-only endpoints are used for infrastructure connection tests and local counter sync.
+
+Test the external connection:
+
+```powershell
+curl "http://127.0.0.1:8000/api/admin/official-shpi/test-connection" `
+  -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN"
+```
+
+Preview valid real SHPI rows:
+
+```powershell
+curl "http://127.0.0.1:8000/api/admin/official-shpi/preview?limit=20" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+Get aggregated official counters:
+
+```powershell
+curl "http://127.0.0.1:8000/api/admin/official-shpi/counters" `
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
+
+Counters are calculated from valid SHPI rows using this format:
+
+```text
+AP061226515KZ
+```
+
+Parsing:
+
+- `AP` - package type, characters 1-2.
+- `06` - SHPI region code, characters 3-4.
+- `122651` - six-digit sequence number, characters 5-10.
+- `5` - check digit, character 11.
+- `KZ` - country, characters 12-13.
+
+The external aggregation uses only rows matching:
+
+```text
+^[A-Z]{2}[0-9]{9}KZ$
+```
+
+For every `(package_type, region_code)`, QazPostWeb reads:
+
+- max six-digit sequence number as `current_value`;
+- row count as `used_count`;
+- max register date as `last_used_date`.
+
+Sync official counters into local `barcode_counters`:
+
+```powershell
+curl -X POST "http://127.0.0.1:8000/api/admin/official-shpi/sync-counters" `
+  -H "Authorization: Bearer YOUR_ADMIN_ACCESS_TOKEN"
+```
+
+Sync behavior:
+
+- creates missing local counter rows for valid official SHPI region codes;
+- updates `barcode_counters.current_value` only when the official value is greater than the local value;
+- never decreases local counters;
+- never resets existing legacy counters;
+- records audit action `official_shpi_counters_synced`.
+
 ## Legacy Clients
 
 Clients are hidden from the MVP frontend. These endpoints remain for legacy compatibility and should not be used by the active department-based workflow.
