@@ -1,0 +1,318 @@
+// QazPostWeb current database ERD for dbdiagram.io
+// Source: docs/database/barcode_schema.sql, SQLAlchemy models, and Alembic migrations.
+// This file contains schema structure only. It does not contain real data or secrets.
+
+Table alembic_version {
+  version_num varchar(128) [pk, not null]
+
+  Note: 'Alembic migration state table.'
+}
+
+Table app_settings {
+  id int [pk, increment]
+  key varchar(100) [not null, unique]
+  value text [not null]
+  created_at timestamptz [not null]
+
+  Note: 'Application key/value settings. Do not store secrets in committed dumps.'
+}
+
+Table audit_logs {
+  id int [pk, increment]
+  user_id int
+  department_id int
+  username varchar(100)
+  action varchar(100) [not null]
+  entity_type varchar(100)
+  entity_id varchar(100)
+  ip_address varchar(100)
+  user_agent varchar(500)
+  details text
+  created_at timestamptz [not null]
+
+  indexes {
+    user_id [name: 'ix_audit_logs_user_id']
+    username [name: 'ix_audit_logs_username']
+    action [name: 'ix_audit_logs_action']
+    created_at [name: 'ix_audit_logs_created_at']
+    department_id [name: 'ix_audit_logs_department_id']
+    (department_id, created_at) [name: 'ix_audit_logs_department_created_at']
+  }
+
+  Note: 'Audit trail with optional user and department scope.'
+}
+
+Table barcode_code_catalog {
+  id int [pk, increment]
+  code varchar(20) [not null, unique]
+  name varchar(255)
+  category varchar(100)
+  status varchar(50) [not null]
+  owner varchar(255)
+  notes text
+  updated_at timestamptz [not null]
+  created_at timestamptz [not null]
+
+  indexes {
+    code [unique, name: 'ix_barcode_code_catalog_code']
+    status [name: 'ix_barcode_code_catalog_status']
+  }
+
+  Note: 'Reference catalog of package/barcode codes. Status is constrained by the database.'
+}
+
+Table barcode_counters {
+  id int [pk, increment]
+  package_type varchar(20) [not null]
+  region_code varchar(2) [not null]
+  current_value int [not null]
+  created_at timestamptz [not null]
+  updated_at timestamptz [not null]
+
+  indexes {
+    (package_type, region_code) [unique, name: 'uq_barcode_counters_package_type_region_code']
+  }
+
+  Note: 'Current SHPI sequence per package_type and official region_code.'
+}
+
+Table barcode_ranges {
+  id int [pk, increment]
+  package_type varchar(20) [not null]
+  region_code varchar(2)
+  start_number int [not null]
+  end_number int [not null]
+  current_number int [not null]
+  status varchar(50) [not null]
+  issued_to_client_id int
+  issued_to_department_id int
+  request_id int
+  issued_by int
+  issued_at timestamptz
+  expires_at timestamptz
+  notes text
+  updated_at timestamptz [not null]
+  created_at timestamptz [not null]
+  cancellation_reason text
+  cancelled_by int
+  cancelled_at timestamptz
+
+  indexes {
+    package_type [name: 'ix_barcode_ranges_package_type']
+    region_code [name: 'ix_barcode_ranges_region_code']
+    status [name: 'ix_barcode_ranges_status']
+    issued_to_client_id [name: 'ix_barcode_ranges_issued_to_client_id']
+    issued_to_department_id [name: 'ix_barcode_ranges_issued_to_department_id']
+    request_id [name: 'ix_barcode_ranges_request_id']
+    issued_by [name: 'ix_barcode_ranges_issued_by']
+  }
+
+  Note: 'Approved range. region_code is fixed at approval time and is source of truth for range generation.'
+}
+
+Table clients {
+  id int [pk, increment]
+  name varchar(255) [not null, unique]
+  contact_person varchar(255)
+  contact_phone varchar(100)
+  email varchar(255)
+  notes text
+  is_active bool [not null]
+  updated_at timestamptz [not null]
+  created_at timestamptz [not null]
+
+  indexes {
+    name [unique, name: 'ix_clients_name']
+  }
+
+  Note: 'Client organization table used by users, requests, and ranges.'
+}
+
+Table departments {
+  id int [pk, increment]
+  code varchar(50) [not null, unique]
+  name varchar(255) [not null]
+  region varchar(255) [not null]
+  parent_id int
+  department_type varchar(50)
+  full_path varchar(1000)
+  external_id varchar(100) [unique]
+  is_active bool [not null]
+  shpi_region_code varchar(2)
+  created_at timestamptz [not null]
+
+  indexes {
+    code [unique, name: 'ix_departments_code']
+    external_id [unique, name: 'ix_departments_external_id']
+    parent_id [name: 'ix_departments_parent_id']
+    shpi_region_code [name: 'ix_departments_shpi_region_code']
+  }
+
+  Note: 'FilPassport department tree. shpi_region_code stores official SHPI region mapping.'
+}
+
+Table generated_batches {
+  id int [pk, increment]
+  package_type varchar(20) [not null]
+  quantity int [not null]
+  first_barcode varchar(50) [not null]
+  last_barcode varchar(50) [not null]
+  department_id int
+  range_id int
+  generated_by varchar(100)
+  source varchar(50)
+  status varchar(50) [not null]
+  generated_at timestamptz [not null]
+  notes text
+
+  indexes {
+    department_id [name: 'ix_generated_batches_department_id']
+    generated_at [name: 'ix_generated_batches_generated_at']
+    package_type [name: 'ix_generated_batches_package_type']
+    range_id [name: 'ix_generated_batches_range_id']
+  }
+
+  Note: 'Header row for a barcode generation operation.'
+}
+
+Table generated_barcodes {
+  id int [pk, increment]
+  batch_id int [not null]
+  barcode varchar(50) [not null, unique]
+  package_type varchar(20) [not null]
+  department_id int
+  sequence_number int [not null]
+  range_id int
+  status varchar(50) [not null]
+  printed bool [not null]
+  printed_at timestamptz
+  printed_by varchar(100)
+  generated_at timestamptz [not null]
+  generated_by varchar(100)
+  cancelled_at timestamptz
+  cancelled_by varchar(100)
+  cancellation_reason text
+  used_at timestamptz
+  used_by varchar(100)
+  usage_notes text
+
+  indexes {
+    barcode [unique, name: 'ix_generated_barcodes_barcode']
+    batch_id [name: 'ix_generated_barcodes_batch_id']
+    department_id [name: 'ix_generated_barcodes_department_id']
+    package_type [name: 'ix_generated_barcodes_package_type']
+    range_id [name: 'ix_generated_barcodes_range_id']
+    status [name: 'ix_generated_barcodes_status']
+  }
+
+  Note: 'Individual generated SHPI barcode rows.'
+}
+
+Table printed_batches {
+  id int [pk, increment]
+  generated_batch_id int [not null]
+  department_id int
+  printed_count int [not null]
+  first_barcode varchar(50) [not null]
+  last_barcode varchar(50) [not null]
+  printed_by varchar(100)
+  printer_name varchar(255)
+  status varchar(50) [not null]
+  printed_at timestamptz [not null]
+  notes text
+
+  indexes {
+    generated_batch_id [name: 'ix_printed_batches_generated_batch_id']
+    department_id [name: 'ix_printed_batches_department_id']
+    printed_at [name: 'ix_printed_batches_printed_at']
+  }
+
+  Note: 'Print history for generated batches.'
+}
+
+Table range_requests {
+  id int [pk, increment]
+  requester_id int [not null]
+  client_id int
+  department_id int
+  package_type varchar(20)
+  requested_quantity int [not null]
+  request_type varchar(100) [not null]
+  payload text
+  status varchar(50) [not null]
+  handled_by int
+  handled_at timestamptz
+  notes text
+  updated_at timestamptz [not null]
+  created_at timestamptz [not null]
+  purpose text
+  requested_code varchar(20)
+  approved_code varchar(20)
+  decision_notes text
+
+  indexes {
+    requester_id [name: 'ix_range_requests_requester_id']
+    client_id [name: 'ix_range_requests_client_id']
+    department_id [name: 'ix_range_requests_department_id']
+    handled_by [name: 'ix_range_requests_handled_by']
+    package_type [name: 'ix_range_requests_package_type']
+    status [name: 'ix_range_requests_status']
+  }
+
+  Note: 'Client/operator/admin workflow for requesting barcode ranges.'
+}
+
+Table users {
+  id int [pk, increment]
+  username varchar(100) [not null, unique]
+  hashed_password varchar(255)
+  full_name varchar(255)
+  role varchar(50) [not null]
+  department_id int
+  client_id int
+  email varchar(255)
+  phone varchar(50)
+  is_active bool [not null]
+  updated_at timestamptz [not null]
+  created_at timestamptz [not null]
+
+  indexes {
+    username [unique, name: 'ix_users_username']
+    role [name: 'ix_users_role']
+    department_id [name: 'ix_users_department_id']
+    client_id [name: 'ix_users_client_id']
+    email [name: 'ix_users_email']
+  }
+
+  Note: 'Application user mapped to role, department scope, and optional client.'
+}
+
+Ref: audit_logs.user_id > users.id
+Ref: audit_logs.department_id > departments.id
+
+Ref: barcode_ranges.issued_to_client_id > clients.id
+Ref: barcode_ranges.issued_to_department_id > departments.id
+Ref: barcode_ranges.request_id > range_requests.id
+Ref: barcode_ranges.issued_by > users.id
+Ref: barcode_ranges.cancelled_by > users.id
+
+Ref: departments.parent_id > departments.id
+
+Ref: generated_batches.department_id > departments.id
+Ref: generated_batches.range_id > barcode_ranges.id
+
+Ref: generated_barcodes.batch_id > generated_batches.id
+Ref: generated_barcodes.department_id > departments.id
+Ref: generated_barcodes.range_id > barcode_ranges.id
+
+Ref: printed_batches.generated_batch_id > generated_batches.id
+Ref: printed_batches.department_id > departments.id
+
+Ref: range_requests.requester_id > users.id
+Ref: range_requests.client_id > clients.id
+Ref: range_requests.department_id > departments.id
+Ref: range_requests.handled_by > users.id
+
+Ref: users.department_id > departments.id
+Ref: users.client_id > clients.id
+

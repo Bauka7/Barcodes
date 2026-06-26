@@ -30,6 +30,11 @@ class Settings(BaseSettings):
         "https://filpassport.kazpost.kz/api/barcodes/ltopdepid.jsn=9999&list=ofrupsall"
     )
     filpassport_timeout_seconds: int = 30
+    official_shpi_db_enabled: bool = False
+    official_shpi_database_url: str = ""
+    official_shpi_table: str = "public.a_mail"
+    official_shpi_barcode_column: str = "mail_id_"
+    official_shpi_date_column: str = "mail_register_date_"
     app_context_path: str = ""
     server_port: int = 8000
     cors_origins: str = ""

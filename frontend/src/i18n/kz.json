@@ -296,10 +296,69 @@
     "counter": "Есептегіш",
     "state": "Күйі",
     "empty": "Кодтар жоқ",
+    "tabs": {
+      "officialMap": "Нақты карта",
+      "officialDetails": "Нақты деректер",
+      "source": "Дереккөзі",
+      "localDiagnostic": "Жергілікті карта / Диагностика"
+    },
     "status": {
       "green": "Қолданыста",
       "gray": "Қолданылмаған",
       "red": "Таусылған"
+    },
+    "official": {
+      "refresh": "toolpar-дан жаңарту",
+      "refreshing": "Жаңартылуда…",
+      "empty": "Нақты есептегіштер жоқ",
+      "summary": {
+        "total": "Барлық комбинациялар",
+        "packageTypes": "Жөнелтілім түрлері",
+        "regionCodes": "Өңірлер",
+        "active": "Белсенді есептегіштер",
+        "exhausted": "Таусылған есептегіштер"
+      },
+      "filters": {
+        "packageType": "package_type",
+        "regionCode": "region_code",
+        "status": "Күйі",
+        "allRegions": "Барлық өңірлер",
+        "allStatuses": "Барлық күйлер"
+      },
+      "columns": {
+        "packageType": "package_type",
+        "regionCode": "region_code",
+        "currentValue": "current_value",
+        "usedCount": "used_count",
+        "lastUsedDate": "last_used_date",
+        "status": "status"
+      },
+      "status": {
+        "active": "Белсенді",
+        "exhausted": "Таусылған",
+        "empty": "Бос"
+      },
+      "errors": {
+        "forbidden": "Нақты деректерді көруге құқық жеткіліксіз.",
+        "unavailable": "Сыртқы ШПИ базасы қолжетімсіз.",
+        "disabled": "Сыртқы ШПИ базасымен интеграция өшірілген.",
+        "generic": "Нақты ШПИ деректерін жүктеу мүмкін болмады."
+      }
+    },
+    "officialMap": {
+      "note": "Негізгі карта жергілікті counters/options.ini деректерінен емес, toolpar read-only нақты деректерінен құрылады."
+    },
+    "source": {
+      "title": "Дереккөзі",
+      "database": "Дерекқор",
+      "table": "Кесте",
+      "shpiColumn": "SHPI column",
+      "dateColumn": "Date column",
+      "example": "ШПИ талдау мысалы",
+      "note": "Деректер read-only режимінде көрсетіледі. Жергілікті есептегіштер өзгермейді."
+    },
+    "localDiagnostic": {
+      "note": "Бұл жергілікті counters. Негізгі нақты карта toolpar деректерінен құрылады."
     }
   },
   "clients": {

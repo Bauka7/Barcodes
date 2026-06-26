@@ -5,6 +5,7 @@ backend/.env
 backend/.venv
 administration-service/
 
+
 # Python cache files
 __pycache__/
 **/__pycache__/
@@ -17,3 +18,7 @@ frontend/dist/
 frontend/vite-dev.*.log
 
 .tmp_reglament_pages
+.idea
+echo .idea/ >> .gitignore
+echo __pycache__/ >> .gitignore
+echo *.pyc >> .gitignore
