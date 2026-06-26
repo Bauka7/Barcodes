@@ -4,7 +4,8 @@ import re
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AppSetting, BarcodeCounter
+from app.models import AppSetting
+from app.services.barcode_counter_service import get_or_create_official_counter_for_update
 from app.services.barcode_history_service import create_generation_history
 from app.services.shpi_region_service import resolve_generation_shpi_region_code
 
@@ -132,13 +133,11 @@ async def generate_barcode_numbers(
             await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)
         )
 
-        result = await session.execute(
-            select(BarcodeCounter)
-            .where(BarcodeCounter.package_type == normalized_package_type)
-            .where(BarcodeCounter.region_code == obl_code)
-            .with_for_update()
+        counter = await get_or_create_official_counter_for_update(
+            session=session,
+            package_type=normalized_package_type,
+            region_code=obl_code,
         )
-        counter = result.scalar_one_or_none()
 
         if counter is None:
             raise CounterNotFoundError(
@@ -187,13 +186,11 @@ async def generate_barcode_numbers_with_history(
             await get_setting_value(session, "country_suffix", DEFAULT_COUNTRY_SUFFIX)
         )
 
-        result = await session.execute(
-            select(BarcodeCounter)
-            .where(BarcodeCounter.package_type == normalized_package_type)
-            .where(BarcodeCounter.region_code == obl_code)
-            .with_for_update()
+        counter = await get_or_create_official_counter_for_update(
+            session=session,
+            package_type=normalized_package_type,
+            region_code=obl_code,
         )
-        counter = result.scalar_one_or_none()
 
         if counter is None:
             raise CounterNotFoundError(

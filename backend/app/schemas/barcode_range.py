@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class BarcodeRangeRead(BaseModel):
     id: int
     package_type: str
+    region_code: str | None = None
     start_number: int
     end_number: int
     current_number: int

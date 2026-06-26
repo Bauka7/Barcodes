@@ -39,6 +39,7 @@ def _barcode_range_to_schema(barcode_range: BarcodeRange) -> BarcodeRangeRead:
     return BarcodeRangeRead(
         id=barcode_range.id,
         package_type=barcode_range.package_type,
+        region_code=barcode_range.region_code,
         start_number=barcode_range.start_number,
         end_number=barcode_range.end_number,
         current_number=barcode_range.current_number,
