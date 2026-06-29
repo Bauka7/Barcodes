@@ -22,3 +22,6 @@ frontend/vite-dev.*.log
 echo .idea/ >> .gitignore
 echo __pycache__/ >> .gitignore
 echo *.pyc >> .gitignore
+backend/.env
+docker-compose.yml
+docker-compose.yml
