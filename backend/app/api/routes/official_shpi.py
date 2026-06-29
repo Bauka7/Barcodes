@@ -93,10 +93,11 @@ async def preview_official_shpi_records(
     status_code=status.HTTP_200_OK,
 )
 async def get_official_shpi_counters(
+    fresh: bool = Query(default=False),
     current_user: User = Depends(require_roles("admin", "operator", "client")),
 ) -> list[OfficialShpiCounterItem]:
     try:
-        counters = await get_counters()
+        counters = await get_counters(fresh=fresh)
     except (
         OfficialShpiDisabledError,
         OfficialShpiConfigurationError,

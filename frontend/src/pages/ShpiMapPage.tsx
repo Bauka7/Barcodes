@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../api/client';
 import {
@@ -141,10 +141,12 @@ function buildOfficialCellTitle(
 
 export default function ShpiMapPage() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabKey>('officialMap');
   const [packageFilter, setPackageFilter] = useState('');
   const [regionFilter, setRegionFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | OfficialCounterStatus>('all');
+  const [officialRefreshPending, setOfficialRefreshPending] = useState(false);
 
   const localMapQuery = useQuery({
     queryKey: ['shpi-map'],
@@ -153,7 +155,10 @@ export default function ShpiMapPage() {
   });
   const officialQuery = useQuery({
     queryKey: ['official-shpi-counters'],
-    queryFn: getOfficialShpiCounters,
+    queryFn: () => getOfficialShpiCounters(),
+    enabled: activeTab === 'officialMap' || activeTab === 'officialDetails',
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 
   const localRegionCodes = localMapQuery.data?.region_codes ?? [];
@@ -210,6 +215,16 @@ export default function ShpiMapPage() {
     ? getOfficialErrorMessage(officialQuery.error, t)
     : null;
 
+  async function refreshOfficialCounters() {
+    setOfficialRefreshPending(true);
+    try {
+      const freshData = await getOfficialShpiCounters(true);
+      queryClient.setQueryData(['official-shpi-counters'], freshData);
+    } finally {
+      setOfficialRefreshPending(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -243,10 +258,10 @@ export default function ShpiMapPage() {
             <p className="text-[15px] text-t2">{t('shpiMap.officialMap.note')}</p>
             <Button
               type="button"
-              onClick={() => void officialQuery.refetch()}
-              disabled={officialQuery.isFetching}
+              onClick={() => void refreshOfficialCounters()}
+              disabled={officialQuery.isFetching || officialRefreshPending}
             >
-              {officialQuery.isFetching
+              {officialQuery.isFetching || officialRefreshPending
                 ? t('shpiMap.official.refreshing')
                 : t('shpiMap.official.refresh')}
             </Button>
@@ -355,10 +370,10 @@ export default function ShpiMapPage() {
             </div>
             <Button
               type="button"
-              onClick={() => void officialQuery.refetch()}
-              disabled={officialQuery.isFetching}
+              onClick={() => void refreshOfficialCounters()}
+              disabled={officialQuery.isFetching || officialRefreshPending}
             >
-              {officialQuery.isFetching
+              {officialQuery.isFetching || officialRefreshPending
                 ? t('shpiMap.official.refreshing')
                 : t('shpiMap.official.refresh')}
             </Button>

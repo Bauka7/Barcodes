@@ -32,5 +32,5 @@ export interface OfficialShpiCounterItem {
 export const getShpiMap = (): Promise<ShpiMapResponse> =>
   apiFetch<ShpiMapResponse>('/admin/shpi-map');
 
-export const getOfficialShpiCounters = (): Promise<OfficialShpiCounterItem[]> =>
-  apiFetch<OfficialShpiCounterItem[]>('/admin/official-shpi/counters');
+export const getOfficialShpiCounters = (fresh = false): Promise<OfficialShpiCounterItem[]> =>
+  apiFetch<OfficialShpiCounterItem[]>(`/admin/official-shpi/counters${fresh ? '?fresh=true' : ''}`);

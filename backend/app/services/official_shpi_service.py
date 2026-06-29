@@ -4,10 +4,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
+from time import monotonic
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 
 from app.core.config import get_settings
 from app.core.regions import OFFICIAL_SHPI_BRANCH_CODE_SET
@@ -17,6 +19,10 @@ logger = logging.getLogger(__name__)
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _PACKAGE_TYPE_RE = re.compile(r"^[A-Z]{2}$")
+_COUNTERS_CACHE_TTL_SECONDS = 30.0
+_official_engine: AsyncEngine | None = None
+_official_engine_key: tuple[str, str] | None = None
+_official_counters_cache: tuple[float, list["OfficialShpiCounter"]] | None = None
 
 
 class OfficialShpiDisabledError(RuntimeError):
@@ -85,6 +91,60 @@ def _normalize_async_database_url(database_url: str) -> str:
     return database_url
 
 
+def _official_connection_config() -> tuple[str, dict[str, object]]:
+    normalized_url = _ensure_enabled()
+    parts = urlsplit(normalized_url)
+    query_params = dict(parse_qsl(parts.query, keep_blank_values=True))
+
+    connect_args: dict[str, object] = {
+        "server_settings": {
+            "application_name": "qazpostweb_official_shpi_readonly",
+            "default_transaction_read_only": "on",
+        },
+    }
+
+    sslmode = query_params.pop("sslmode", "").strip().lower()
+    if sslmode:
+        if sslmode in {"disable", "allow", "prefer"}:
+            connect_args["ssl"] = False
+        elif sslmode in {"require", "verify-ca", "verify-full"}:
+            connect_args["ssl"] = True
+        else:
+            raise OfficialShpiConfigurationError(
+                "Unsupported sslmode for official SHPI connection."
+            )
+
+    sanitized_url = urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(query_params),
+            parts.fragment,
+        )
+    )
+    return sanitized_url, connect_args
+
+
+def _get_official_engine(
+    database_url: str,
+    connect_args: dict[str, object],
+) -> AsyncEngine:
+    global _official_engine, _official_engine_key
+
+    engine_key = (database_url, repr(connect_args))
+    if _official_engine is None or _official_engine_key != engine_key:
+        _official_engine = create_async_engine(
+            database_url,
+            echo=False,
+            pool_pre_ping=True,
+            connect_args=connect_args,
+        )
+        _official_engine_key = engine_key
+
+    return _official_engine
+
+
 def _quoted_identifier(identifier: str) -> str:
     normalized = identifier.strip()
     if not _IDENTIFIER_RE.fullmatch(normalized):
@@ -125,21 +185,10 @@ def _ensure_enabled() -> str:
 
 @asynccontextmanager
 async def _official_connection() -> AsyncIterator[AsyncConnection]:
-    database_url = _ensure_enabled()
-    engine = None
+    database_url, connect_args = _official_connection_config()
 
     try:
-        engine = create_async_engine(
-            database_url,
-            echo=False,
-            pool_pre_ping=True,
-            connect_args={
-                "server_settings": {
-                    "application_name": "qazpostweb_official_shpi_readonly",
-                    "default_transaction_read_only": "on",
-                },
-            },
-        )
+        engine = _get_official_engine(database_url, connect_args)
         async with engine.connect() as connection:
             yield connection
     except OfficialShpiDisabledError:
@@ -154,9 +203,6 @@ async def _official_connection() -> AsyncIterator[AsyncConnection]:
         raise OfficialShpiConnectionError(
             "Official SHPI database is unavailable."
         ) from error
-    finally:
-        if engine is not None:
-            await engine.dispose()
 
 
 async def test_connection() -> dict[str, bool | str]:
@@ -230,7 +276,14 @@ async def preview(limit: int = 20) -> list[OfficialShpiPreviewRow]:
     return rows
 
 
-async def get_counters() -> list[OfficialShpiCounter]:
+async def get_counters(fresh: bool = False) -> list[OfficialShpiCounter]:
+    global _official_counters_cache
+
+    if not fresh and _official_counters_cache is not None:
+        cached_at, cached_counters = _official_counters_cache
+        if monotonic() - cached_at < _COUNTERS_CACHE_TTL_SECONDS:
+            return cached_counters
+
     table_name, barcode_column, date_column = _official_sql_parts()
     statement = text(
         f"""
@@ -265,13 +318,15 @@ async def get_counters() -> list[OfficialShpiCounter]:
                 last_used_date=row["last_used_date"],
             )
         )
+
+    _official_counters_cache = (monotonic(), counters)
     return counters
 
 
 async def sync_counters_to_local_db(session: AsyncSession) -> OfficialShpiSyncResult:
     """Sync official external counters into local barcode_counters without decreasing values."""
 
-    official_counters = await get_counters()
+    official_counters = await get_counters(fresh=True)
     created = 0
     updated = 0
     unchanged = 0
