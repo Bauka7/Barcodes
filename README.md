@@ -1,5 +1,5 @@
 ﻿# QazPostWeb
-
+1
 Backend-first rewrite of the legacy KazPost barcode label application.
 
 The current project contains a FastAPI backend that generates legacy-compatible KazPost SHPI barcode numbers, stores generation history in PostgreSQL, imports legacy settings/departments, and creates downloadable PDF labels for printing.
